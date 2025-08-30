@@ -19,6 +19,7 @@ import (
 
 type Pusher interface {
 	Mirror(ctx context.Context, sourceImage string) error
+	DryRun() bool
 }
 
 type pusher struct {
@@ -98,4 +99,8 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return fmt.Errorf("push %s: %w", target, err)
 	}
 	return nil
+}
+
+func (p *pusher) DryRun() bool {
+	return p.dryRun
 }
