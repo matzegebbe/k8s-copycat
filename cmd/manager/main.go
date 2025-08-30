@@ -157,7 +157,17 @@ func main() {
 	}
 	allowedNS := strings.Split(includeEnv, ",")
 
-	dryRun := dryRunFlag || fileCfg.DryRun
+	// DRY_RUN env var takes highest precedence
+	dryRunEnv := os.Getenv("DRY_RUN")
+	dryRun := false
+	if dryRunEnv != "" {
+		val := strings.ToLower(strings.TrimSpace(dryRunEnv))
+		if val == "1" || val == "true" || val == "yes" {
+			dryRun = true
+		}
+	} else {
+		dryRun = dryRunFlag || fileCfg.DryRun
+	}
 
 	pusher := mirror.NewPusher(t, dryRun)
 	if err := controllers.SetupAll(mgr, pusher, allowedNS); err != nil {
