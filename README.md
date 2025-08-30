@@ -11,6 +11,7 @@
 - `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO` (for ECR)
 - `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD` (for Docker)
 - `INCLUDE_NAMESPACES`: `*` or comma list (e.g., `default,prod`)
+- `STARTUP_PUSH` (default: `true`): set to `false` to skip the initial startup image push
 
 ## Build container
 ```bash
@@ -33,4 +34,4 @@ In dry run mode, Doppler will log the actions it would take instead of pushing i
 
 ## Startup Image Push
 
-On startup, Doppler will push (or simulate pushing, if dry run is enabled) all images currently present in the allowed namespaces. This ensures that all existing images are mirrored, not just those detected by watch events.
+On startup, Doppler will push (or simulate pushing, if dry run is enabled) all images currently present in the allowed namespaces. This ensures that all existing images are mirrored, not just those detected by watch events. This behaviour can be disabled by setting `STARTUP_PUSH=false` or `startupPush: false` in the config file.
