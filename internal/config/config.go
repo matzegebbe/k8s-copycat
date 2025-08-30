@@ -20,6 +20,7 @@ type ECR struct {
 type Docker struct {
 	Registry   string `yaml:"registry"`
 	RepoPrefix string `yaml:"repoPrefix"`
+	Insecure   bool   `yaml:"insecure"`
 	// Username/Password should come from Secret envs, not ConfigMap.
 }
 

@@ -104,6 +104,8 @@ spec:
 #           value: "ghcr.io"
 #         - name: TARGET_REPO_PREFIX
 #           value: "mirrors"
+#         - name: TARGET_INSECURE
+#           value: "true"
 #         - name: TARGET_USERNAME
 #           valueFrom: { secretKeyRef: { name: registry-creds, key: username } }
 #         - name: TARGET_PASSWORD
@@ -126,3 +128,4 @@ data:
     docker:
       registry: "ghcr.io"
       repoPrefix: "mirrors"
+      insecure: false

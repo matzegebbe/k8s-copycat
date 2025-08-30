@@ -31,8 +31,12 @@ func NewPusher(t registry.Target, dryRun bool) Pusher {
 	return &pusher{target: t, dryRun: dryRun}
 }
 
-func transport() http.RoundTripper {
+func transport(insecure bool) http.RoundTripper {
 	d := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
+	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	if insecure {
+		tlsCfg.InsecureSkipVerify = true
+	}
 	return &http.Transport{
 		Proxy:                 http.ProxyFromEnvironment,
 		DialContext:           d.DialContext,
@@ -40,7 +44,7 @@ func transport() http.RoundTripper {
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
-		TLSClientConfig:       &tls.Config{MinVersion: tls.VersionTLS12},
+		TLSClientConfig:       tlsCfg,
 	}
 }
 
@@ -50,7 +54,7 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return fmt.Errorf("parse source: %w", err)
 	}
 
-	img, err := remote.Image(srcRef, remote.WithContext(ctx), remote.WithTransport(transport()))
+	img, err := remote.Image(srcRef, remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure())))
 	if err != nil {
 		return fmt.Errorf("pull %s: %w", src, err)
 	}
@@ -86,7 +90,11 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 	}
 
 	auth := &authn.Basic{Username: username, Password: password}
-	targetRef, err := name.NewTag(target, name.WeakValidation)
+	opts := []name.Option{name.WeakValidation}
+	if p.target.Insecure() {
+		opts = append(opts, name.Insecure)
+	}
+	targetRef, err := name.NewTag(target, opts...)
 	if err != nil {
 		return fmt.Errorf("parse target: %w", err)
 	}
@@ -95,7 +103,7 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		fmt.Printf("[DRY RUN] Would push image %s to %s\n", src, target)
 		return nil
 	}
-	if err := remote.Write(targetRef, img, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport())); err != nil {
+	if err := remote.Write(targetRef, img, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err != nil {
 		return fmt.Errorf("push %s: %w", target, err)
 	}
 	return nil
