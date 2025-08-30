@@ -1,0 +1,120 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: doppler
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: doppler-manager
+  namespace: doppler
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: doppler-reader
+rules:
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get","list","watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get","list","watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: doppler-reader-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: doppler-reader
+subjects:
+  - kind: ServiceAccount
+    name: doppler-manager
+    namespace: doppler
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: doppler
+  namespace: doppler
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: doppler }
+  template:
+    metadata:
+      labels: { app: doppler }
+    spec:
+      serviceAccountName: doppler-manager
+      containers:
+        - name: doppler
+          volumeMounts:
+            - name: doppler-config
+              mountPath: /config
+              readOnly: true
+          image: ghcr.io/matzegebbe/k8s-image-doppler:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            # choose one of: ecr | docker
+            - name: TARGET_KIND
+              value: "ecr"
+            - name: AWS_REGION
+              value: "eu-central-1"
+            - name: ECR_ACCOUNT_ID
+              value: "123456789012"
+            - name: ECR_REPO_PREFIX
+              value: "mirrors"
+            - name: ECR_CREATE_REPO
+              value: "true"
+            # include namespaces: "*" or "default,prod"
+            - name: CONFIG_PATH
+              value: "/config/config.yaml"
+            - name: INCLUDE_NAMESPACES
+              value: "*"
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits:   { cpu: 500m, memory: 256Mi }
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8081 }
+            initialDelaySeconds: 10
+          readinessProbe:
+            httpGet: { path: /readyz, port: 8081 }
+            initialDelaySeconds: 5
+      volumes:
+        - name: doppler-config
+          configMap:
+            name: doppler-config
+            items:
+              - key: config.yaml
+                path: config.yaml
+# --- For Docker registry instead of ECR, set:
+#         - name: TARGET_KIND
+#           value: "docker"
+#         - name: TARGET_REGISTRY
+#           value: "ghcr.io"
+#         - name: TARGET_REPO_PREFIX
+#           value: "mirrors"
+#         - name: TARGET_USERNAME
+#           valueFrom: { secretKeyRef: { name: registry-creds, key: username } }
+#         - name: TARGET_PASSWORD
+#           valueFrom: { secretKeyRef: { name: registry-creds, key: password } }
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: doppler-config
+  namespace: doppler
+data:
+  config.yaml: |
+    targetKind: ecr        # ecr | docker
+    ecr:
+      accountID: "123456789012"
+      region: "eu-central-1"
+      repoPrefix: "mirrors"
+      createRepo: true
+    docker:
+      registry: "ghcr.io"
+      repoPrefix: "mirrors"
