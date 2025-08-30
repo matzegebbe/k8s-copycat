@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"os"
+	"strconv"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -169,6 +170,16 @@ func main() {
 		dryRun = dryRunFlag || fileCfg.DryRun
 	}
 
+	startupPush := true
+	if fileCfg.StartupPush != nil {
+		startupPush = *fileCfg.StartupPush
+	}
+	if v, ok := os.LookupEnv("STARTUP_PUSH"); ok {
+		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
+			startupPush = parsed
+		}
+	}
+
 	pusher := mirror.NewPusher(t, dryRun)
 	if err := controllers.SetupAll(mgr, pusher, allowedNS); err != nil {
 		logger.Error(err, "setup controllers failed")
@@ -176,9 +187,13 @@ func main() {
 	}
 
 	// Register startup image push as a Runnable
-	if err := mgr.Add(&StartupImagePush{Client: mgr.GetClient(), AllowedNS: allowedNS, Pusher: pusher, Logger: logger}); err != nil {
-		logger.Error(err, "failed to add startup image push runnable")
-		os.Exit(1)
+	if startupPush {
+		if err := mgr.Add(&StartupImagePush{Client: mgr.GetClient(), AllowedNS: allowedNS, Pusher: pusher, Logger: logger}); err != nil {
+			logger.Error(err, "failed to add startup image push runnable")
+			os.Exit(1)
+		}
+	} else {
+		logger.Info("startup image push disabled")
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
