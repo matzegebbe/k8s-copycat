@@ -165,21 +165,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Push all existing images on startup
-	k8sClient := mgr.GetClient()
-	for _, ns := range allowedNS {
-		if ns == "*" {
-			var nsList corev1.NamespaceList
-			if err := k8sClient.List(ctx, &nsList); err != nil {
-				logger.Error(err, "failed to list namespaces")
-				os.Exit(1)
-			}
-			for _, nsObj := range nsList.Items {
-				pushImagesInNamespace(ctx, k8sClient, nsObj.Name, pusher, logger)
-			}
-		} else {
-			pushImagesInNamespace(ctx, k8sClient, ns, pusher, logger)
-		}
+	// Register startup image push as a Runnable
+	if err := mgr.Add(&StartupImagePush{Client: mgr.GetClient(), AllowedNS: allowedNS, Pusher: pusher, Logger: logger}); err != nil {
+		logger.Error(err, "failed to add startup image push runnable")
+		os.Exit(1)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -196,6 +185,32 @@ func main() {
 		logger.Error(err, "manager exited non-zero")
 		os.Exit(1)
 	}
+}
+
+// StartupImagePush implements Runnable for pushing images on startup
+type StartupImagePush struct {
+	Client    client.Client
+	AllowedNS []string
+	Pusher    mirror.Pusher
+	Logger    logr.Logger
+}
+
+func (s *StartupImagePush) Start(ctx context.Context) error {
+	for _, ns := range s.AllowedNS {
+		if ns == "*" {
+			var nsList corev1.NamespaceList
+			if err := s.Client.List(ctx, &nsList); err != nil {
+				s.Logger.Error(err, "failed to list namespaces")
+				return err
+			}
+			for _, nsObj := range nsList.Items {
+				pushImagesInNamespace(ctx, s.Client, nsObj.Name, s.Pusher, s.Logger)
+			}
+		} else {
+			pushImagesInNamespace(ctx, s.Client, ns, s.Pusher, s.Logger)
+		}
+	}
+	return nil
 }
 
 // Helper function to push all images in a namespace
