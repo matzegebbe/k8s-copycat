@@ -1,0 +1,47 @@
+version: 2
+updates:
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "18:00"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 5
+    labels: ["deps", "ci"]
+
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "18:05"
+      timezone: "Europe/Berlin"
+    open-pull-requests-limit: 10
+    labels: ["deps", "go"]
+    commit-message:
+      prefix: "go"
+      include: "scope"
+    groups:
+      go-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["patch"]
+      go-minor:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["minor"]
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "friday"
+      time: "18:15"
+      timezone: "Europe/Berlin"
+    labels: ["deps", "docker"]
+    commit-message:
+      prefix: "docker"
+      include: "scope"
+    open-pull-requests-limit: 5
