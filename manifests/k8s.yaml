@@ -67,9 +67,9 @@ spec:
             - name: TARGET_KIND
               value: "docker"
             - name: TARGET_REPO_PREFIX
-              value: "/xxx/playground/testproject1"
+              value: "backup"
             - name: TARGET_REGISTRY
-              value: "registry.gitlab.com"
+              value: "registry.test.svc.cluster.local:5000"
             - name: DRY_RUN
               value: "true"
             #- name: ECR_REPO_PREFIX
