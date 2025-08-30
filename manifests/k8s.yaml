@@ -20,6 +20,12 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
     verbs: ["get","list","watch"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -54,25 +60,27 @@ spec:
             - name: doppler-config
               mountPath: /config
               readOnly: true
-          image: ghcr.io/matzegebbe/k8s-image-doppler:latest
+          image: ghcr.io/matzegebbe/k8s-image-doppler:1
           imagePullPolicy: IfNotPresent
           env:
             # choose one of: ecr | docker
             - name: TARGET_KIND
-              value: "ecr"
-            - name: AWS_REGION
-              value: "eu-central-1"
-            - name: ECR_ACCOUNT_ID
-              value: "123456789012"
-            - name: ECR_REPO_PREFIX
-              value: "mirrors"
-            - name: ECR_CREATE_REPO
+              value: "docker"
+            - name: TARGET_REPO_PREFIX
+              value: "/xxx/playground/testproject1"
+            - name: TARGET_REGISTRY
+              value: "registry.gitlab.com"
+            - name: DRY_RUN
               value: "true"
+            #- name: ECR_REPO_PREFIX
+            #  value: "mirrors"
+            #- name: ECR_CREATE_REPO
+            #  value: "true"
             # include namespaces: "*" or "default,prod"
-            - name: CONFIG_PATH
-              value: "/config/config.yaml"
+            #- name: CONFIG_PATH
+            #  value: "/config/config.yaml"
             - name: INCLUDE_NAMESPACES
-              value: "*"
+              value: "test"
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits:   { cpu: 500m, memory: 256Mi }
