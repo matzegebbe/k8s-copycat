@@ -9,7 +9,7 @@
 ## Env
 - `TARGET_KIND`: `ecr` (default) or `docker`
 - `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO` (for ECR)
-- `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD` (for Docker)
+- `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD`, `TARGET_INSECURE` (for Docker)
 - `INCLUDE_NAMESPACES`: `*` or comma list (e.g., `default,prod`)
 - `STARTUP_PUSH` (default: `true`): set to `false` to skip the initial startup image push
 

@@ -131,11 +131,18 @@ func main() {
 		if v := os.Getenv("TARGET_REPO_PREFIX"); v != "" {
 			dPrefix = v
 		}
+		dInsecure := fileCfg.Docker.Insecure
+		if v := os.Getenv("TARGET_INSECURE"); v != "" {
+			if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
+				dInsecure = parsed
+			}
+		}
 		d := registry.DockerConfig{
 			Registry:   dRegistry,
 			RepoPrefix: dPrefix,
 			Username:   os.Getenv("TARGET_USERNAME"),
 			Password:   os.Getenv("TARGET_PASSWORD"),
+			Insecure:   dInsecure,
 		}
 		if d.Registry == "" {
 			logger.Error(nil, "for TARGET_KIND=docker set TARGET_REGISTRY (via ConfigMap or env)")
