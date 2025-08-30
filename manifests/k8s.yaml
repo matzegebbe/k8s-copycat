@@ -70,6 +70,8 @@ spec:
               value: "backup"
             - name: TARGET_REGISTRY
               value: "registry.test.svc.cluster.local:5000"
+            - name: TARGET_INSECURE
+              value: "true"
             - name: DRY_RUN
               value: "true"
             #- name: ECR_REPO_PREFIX
