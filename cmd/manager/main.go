@@ -65,7 +65,11 @@ func main() {
 		LeaderElectionID:       "doppler.k8s-image-doppler",
 	}
 	if !(len(cfg.AllowedNS) == 1 && cfg.AllowedNS[0] == "*") {
-		mgrOpts.NewCache = cache.MultiNamespacedCacheBuilder(cfg.AllowedNS)
+		nsMap := make(map[string]cache.Config, len(cfg.AllowedNS))
+		for _, ns := range cfg.AllowedNS {
+			nsMap[ns] = cache.Config{}
+		}
+		mgrOpts.Cache = cache.Options{DefaultNamespaces: nsMap}
 	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
 	if err != nil {
