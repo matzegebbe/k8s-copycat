@@ -12,16 +12,12 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/go-logr/logr"
-
 	"github.com/matzegebbe/doppler/internal/controllers"
 	"github.com/matzegebbe/doppler/internal/mirror"
-	"github.com/matzegebbe/doppler/pkg/util"
 )
 
 var scheme = runtime.NewScheme()
@@ -83,16 +79,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Register startup image push as a Runnable
-	if cfg.StartupPush {
-		if err := mgr.Add(&StartupImagePush{Client: mgr.GetClient(), AllowedNS: cfg.AllowedNS, Pusher: pusher, Logger: logger}); err != nil {
-			logger.Error(err, "failed to add startup image push runnable")
-			os.Exit(1)
-		}
-	} else {
-		logger.Info("startup image push disabled")
-	}
-
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		logger.Error(err, "healthz failed")
 		os.Exit(1)
@@ -106,47 +92,5 @@ func main() {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		logger.Error(err, "manager exited non-zero")
 		os.Exit(1)
-	}
-}
-
-// StartupImagePush implements Runnable for pushing images on startup
-type StartupImagePush struct {
-	Client    client.Client
-	AllowedNS []string
-	Pusher    mirror.Pusher
-	Logger    logr.Logger
-}
-
-func (s *StartupImagePush) Start(ctx context.Context) error {
-	for _, ns := range s.AllowedNS {
-		if ns == "*" {
-			var nsList corev1.NamespaceList
-			if err := s.Client.List(ctx, &nsList); err != nil {
-				s.Logger.Error(err, "failed to list namespaces")
-				return err
-			}
-			for _, nsObj := range nsList.Items {
-				pushImagesInNamespace(ctx, s.Client, nsObj.Name, s.Pusher, s.Logger)
-			}
-		} else {
-			pushImagesInNamespace(ctx, s.Client, ns, s.Pusher, s.Logger)
-		}
-	}
-	return nil
-}
-
-// Helper function to push all images in a namespace
-func pushImagesInNamespace(ctx context.Context, k8sClient client.Client, namespace string, pusher mirror.Pusher, logger logr.Logger) {
-	var podList corev1.PodList
-	if err := k8sClient.List(ctx, &podList, client.InNamespace(namespace)); err != nil {
-		logger.Error(err, "failed to list pods", "namespace", namespace)
-		return
-	}
-	for _, pod := range podList.Items {
-		for _, img := range util.ImagesFromPodSpec(&pod.Spec) {
-			if err := pusher.Mirror(ctx, img); err != nil {
-				logger.Error(err, "failed to push image", "image", img)
-			}
-		}
 	}
 }

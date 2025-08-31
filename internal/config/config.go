@@ -25,12 +25,11 @@ type Docker struct {
 }
 
 type Config struct {
-	TargetKind  string `yaml:"targetKind"` // ecr | docker
-	ECR         ECR    `yaml:"ecr"`
-	Docker      Docker `yaml:"docker"`
-	DryRun      bool   `yaml:"dryRun"`
-	Offline     bool   `yaml:"offline"`
-	StartupPush *bool  `yaml:"startupPush"`
+	TargetKind string `yaml:"targetKind"` // ecr | docker
+	ECR        ECR    `yaml:"ecr"`
+	Docker     Docker `yaml:"docker"`
+	DryRun     bool   `yaml:"dryRun"`
+	Offline    bool   `yaml:"offline"`
 }
 
 func Load(path string) (Config, bool, error) {
