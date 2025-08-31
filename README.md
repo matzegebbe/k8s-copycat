@@ -2,7 +2,7 @@
 
 ![doppler logo](doppler-logo.png)
 
-- Watches **Deployments** and **Pods**
+- Watches **Deployments**, **StatefulSets**, **Jobs**, **CronJobs** and **Pods**
 - Mirrors container images to **AWS ECR** (via AWS SDK v2 + IRSA) or a **generic Docker registry**
 - Optional namespace filter via `INCLUDE_NAMESPACES` (e.g. `"default,prod"` or `"*"` for all)
 
@@ -33,7 +33,7 @@ docker build -t ghcr.io/matzegebbe/k8s-image-doppler:latest .
 ```
 
 ## How it works
-- Manager (controller-runtime) runs 2 controllers (Deployments, Pods)
+- Manager (controller-runtime) runs controllers for Deployments, StatefulSets, Jobs, CronJobs and Pods
 - On events we collect images from the PodSpec and push them to the target registry
 
 ## Dry Run Mode
