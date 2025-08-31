@@ -29,7 +29,7 @@ Rules are evaluated in order with the first matching entry applied. Leaving
 
 ## Build container
 ```bash
-docker build -t ghcr.io/matzegebbe/k8s-copycat:latest .
+docker build -t ghcr.io/matzegebbe/k8s-copycat:main .
 ```
 
 ## How it works
