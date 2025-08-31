@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
@@ -27,10 +28,12 @@ type pusher struct {
 	target  registry.Target
 	dryRun  bool
 	offline bool
+	mu      sync.Mutex
+	pushed  map[string]struct{}
 }
 
 func NewPusher(t registry.Target, dryRun, offline bool) Pusher {
-	return &pusher{target: t, dryRun: dryRun, offline: offline}
+	return &pusher{target: t, dryRun: dryRun, offline: offline, pushed: make(map[string]struct{})}
 }
 
 func transport(insecure bool) http.RoundTripper {
@@ -63,15 +66,37 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		repo = strings.TrimSuffix(pref, "/") + "/" + repo
 	}
 
-	// Tag: keep if present, else digest-based using reference digest
-	var tag string
-	if t, ok := srcRef.(name.Tag); ok {
-		tag = t.TagStr()
-	} else {
-		tag = "mirror-" + util.ShortDigest(srcRef.Identifier())
+	var target string
+	var targetRef name.Reference
+	opts := []name.Option{name.WeakValidation}
+	if p.target.Insecure() {
+		opts = append(opts, name.Insecure)
+	}
+	switch r := srcRef.(type) {
+	case name.Tag:
+		target = fmt.Sprintf("%s/%s:%s", p.target.Registry(), repo, r.TagStr())
+		targetRef, err = name.NewTag(target, opts...)
+	case name.Digest:
+		target = fmt.Sprintf("%s/%s@%s", p.target.Registry(), repo, r.DigestStr())
+		targetRef, err = name.NewDigest(target, opts...)
+	default:
+		return fmt.Errorf("unsupported reference type %T", srcRef)
+	}
+	if err != nil {
+		return fmt.Errorf("parse target: %w", err)
 	}
 
-	target := fmt.Sprintf("%s/%s:%s", p.target.Registry(), repo, tag)
+	p.mu.Lock()
+	if _, exists := p.pushed[target]; exists {
+		p.mu.Unlock()
+		if p.dryRun {
+			fmt.Printf("[DRY RUN] Image %s already processed this run\n", src)
+		}
+		return nil
+	}
+	p.pushed[target] = struct{}{}
+	p.mu.Unlock()
+
 	if p.offline {
 		fmt.Printf("[OFFLINE] Would push image %s to %s\n", src, target)
 		return nil
@@ -79,23 +104,21 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 
 	img, err := remote.Image(srcRef, remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure())))
 	if err != nil {
+		p.mu.Lock()
+		delete(p.pushed, target)
+		p.mu.Unlock()
 		return fmt.Errorf("pull %s: %w", src, err)
 	}
 
 	username, password, err := p.target.BasicAuth(ctx)
 	if err != nil {
+		p.mu.Lock()
+		delete(p.pushed, target)
+		p.mu.Unlock()
 		return fmt.Errorf("auth: %w", err)
 	}
 
 	auth := &authn.Basic{Username: username, Password: password}
-	opts := []name.Option{name.WeakValidation}
-	if p.target.Insecure() {
-		opts = append(opts, name.Insecure)
-	}
-	targetRef, err := name.NewTag(target, opts...)
-	if err != nil {
-		return fmt.Errorf("parse target: %w", err)
-	}
 
 	// Skip if image already exists in target registry
 	if _, err := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err == nil {
@@ -106,10 +129,16 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 	} else if te, ok := err.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
 		// continue to push
 	} else if err != nil {
+		p.mu.Lock()
+		delete(p.pushed, target)
+		p.mu.Unlock()
 		return fmt.Errorf("check %s: %w", target, err)
 	}
 
 	if err := p.target.EnsureRepository(ctx, repo); err != nil {
+		p.mu.Lock()
+		delete(p.pushed, target)
+		p.mu.Unlock()
 		return fmt.Errorf("ensure repo %s: %w", repo, err)
 	}
 
@@ -118,6 +147,9 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return nil
 	}
 	if err := remote.Write(targetRef, img, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err != nil {
+		p.mu.Lock()
+		delete(p.pushed, target)
+		p.mu.Unlock()
 		return fmt.Errorf("push %s: %w", target, err)
 	}
 	return nil
