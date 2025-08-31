@@ -150,12 +150,14 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		fmt.Printf("[DRY RUN] Would push image %s to %s\n", src, target)
 		return nil
 	}
+	fmt.Printf("Pushing image %s to %s\n", src, target)
 	if err := remote.Write(targetRef, img, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err != nil {
 		p.mu.Lock()
 		delete(p.pushed, target)
 		p.mu.Unlock()
 		return fmt.Errorf("push %s: %w", target, err)
 	}
+	fmt.Printf("Finished pushing image %s to %s\n", src, target)
 	return nil
 }
 
