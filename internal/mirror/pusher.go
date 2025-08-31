@@ -15,8 +15,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	remotetransport "github.com/google/go-containerregistry/pkg/v1/remote/transport"
 
-	"github.com/matzegebbe/doppler/internal/registry"
-	"github.com/matzegebbe/doppler/pkg/util"
+	"github.com/matzegebbe/k8s-copycat/internal/registry"
+	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
 
 type Pusher interface {

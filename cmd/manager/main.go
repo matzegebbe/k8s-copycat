@@ -17,9 +17,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
-	"github.com/matzegebbe/doppler/internal/controllers"
-	"github.com/matzegebbe/doppler/internal/mirror"
-	"github.com/matzegebbe/doppler/pkg/util"
+	"github.com/matzegebbe/k8s-copycat/internal/controllers"
+	"github.com/matzegebbe/k8s-copycat/internal/mirror"
+	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
 
 var scheme = runtime.NewScheme()
@@ -61,7 +61,7 @@ func main() {
 		Metrics:                server.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "doppler.k8s-image-doppler",
+		LeaderElectionID:       "k8s-copycat.k8s-copycat",
 	}
 	if !(len(cfg.AllowedNS) == 1 && cfg.AllowedNS[0] == "*") {
 		nsMap := make(map[string]cache.Config, len(cfg.AllowedNS))

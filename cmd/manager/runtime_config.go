@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/matzegebbe/doppler/internal/config"
-	"github.com/matzegebbe/doppler/internal/registry"
-	"github.com/matzegebbe/doppler/pkg/util"
+	"github.com/matzegebbe/k8s-copycat/internal/config"
+	"github.com/matzegebbe/k8s-copycat/internal/registry"
+	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
 
 // runtimeConfig holds all runtime configuration derived from flags, env vars and the config file.

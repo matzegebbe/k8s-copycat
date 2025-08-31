@@ -1,11 +1,10 @@
-module github.com/matzegebbe/doppler
+module github.com/matzegebbe/k8s-copycat
 
 go 1.24.0
 
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.31.6
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.50.1
-	github.com/go-logr/logr v1.4.3
 	github.com/google/go-containerregistry v0.20.6
 	k8s.io/api v0.34.0
 	k8s.io/apimachinery v0.34.0
@@ -38,6 +37,7 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.20.2 // indirect
