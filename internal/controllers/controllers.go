@@ -6,6 +6,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -81,6 +82,66 @@ func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+type StatefulSetReconciler struct{ baseReconciler }
+
+func (r *StatefulSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	if !r.nsAllowed(req.Namespace) {
+		return ctrl.Result{}, nil
+	}
+	var s appsv1.StatefulSet
+	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &s); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	return r.processPodSpec(ctx, s.Namespace, &s.Spec.Template.Spec)
+}
+func (r *StatefulSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&appsv1.StatefulSet{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Complete(r)
+}
+
+type JobReconciler struct{ baseReconciler }
+
+func (r *JobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	if !r.nsAllowed(req.Namespace) {
+		return ctrl.Result{}, nil
+	}
+	var j batchv1.Job
+	if err := r.Get(ctx, req.NamespacedName, &j); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	return r.processPodSpec(ctx, j.Namespace, &j.Spec.Template.Spec)
+}
+func (r *JobReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&batchv1.Job{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Complete(r)
+}
+
+type CronJobReconciler struct{ baseReconciler }
+
+func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	if !r.nsAllowed(req.Namespace) {
+		return ctrl.Result{}, nil
+	}
+	var cj batchv1.CronJob
+	if err := r.Get(ctx, req.NamespacedName, &cj); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	return r.processPodSpec(ctx, cj.Namespace, &cj.Spec.JobTemplate.Spec.Template.Spec)
+}
+func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&batchv1.CronJob{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Complete(r)
+}
+
 type PodReconciler struct{ baseReconciler }
 
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -104,9 +165,18 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// SetupAll wires the two controllers.
+// SetupAll wires all controllers.
 func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string) error {
 	if err := (&DeploymentReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
+		return err
+	}
+	if err := (&StatefulSetReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
+		return err
+	}
+	if err := (&JobReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
+		return err
+	}
+	if err := (&CronJobReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
 		return err
 	}
 	if err := (&PodReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
