@@ -13,6 +13,7 @@ import (
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -54,15 +55,32 @@ func main() {
 	logger := zap.New(zap.UseFlagOptions(&opts))
 	ctrl.SetLogger(logger)
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme: scheme,
-		Metrics: server.Options{
-			BindAddress: metricsAddr,
-		},
+	includeEnv := os.Getenv("INCLUDE_NAMESPACES")
+	if includeEnv == "" {
+		includeEnv = "*"
+	}
+	rawNS := strings.Split(includeEnv, ",")
+	allowedNS := make([]string, 0, len(rawNS))
+	for _, ns := range rawNS {
+		if trimmed := strings.TrimSpace(ns); trimmed != "" {
+			allowedNS = append(allowedNS, trimmed)
+		}
+	}
+	if len(allowedNS) == 0 {
+		allowedNS = []string{"*"}
+	}
+
+	mgrOpts := ctrl.Options{
+		Scheme:                 scheme,
+		Metrics:                server.Options{BindAddress: metricsAddr},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "doppler.k8s-image-doppler",
-	})
+	}
+	if !(len(allowedNS) == 1 && strings.TrimSpace(allowedNS[0]) == "*") {
+		mgrOpts.NewCache = cache.MultiNamespacedCacheBuilder(allowedNS)
+	}
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
 	if err != nil {
 		logger.Error(err, "unable to start manager")
 		os.Exit(1)
@@ -160,12 +178,6 @@ func main() {
 		logger.Error(err, "init registry target failed")
 		os.Exit(1)
 	}
-
-	includeEnv := os.Getenv("INCLUDE_NAMESPACES")
-	if includeEnv == "" {
-		includeEnv = "*"
-	}
-	allowedNS := strings.Split(includeEnv, ",")
 
 	// DRY_RUN env var takes highest precedence
 	dryRunEnv := os.Getenv("DRY_RUN")
