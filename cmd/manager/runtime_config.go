@@ -13,11 +13,10 @@ import (
 
 // runtimeConfig holds all runtime configuration derived from flags, env vars and the config file.
 type runtimeConfig struct {
-	AllowedNS   []string
-	Target      registry.Target
-	DryRun      bool
-	Offline     bool
-	StartupPush bool
+	AllowedNS []string
+	Target    registry.Target
+	DryRun    bool
+	Offline   bool
 }
 
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
@@ -143,21 +142,10 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, offlineFlag bool) (runti
 		offline = offlineFlag || fileCfg.Offline
 	}
 
-	startupPush := true
-	if fileCfg.StartupPush != nil {
-		startupPush = *fileCfg.StartupPush
-	}
-	if v, ok := os.LookupEnv("STARTUP_PUSH"); ok {
-		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
-			startupPush = parsed
-		}
-	}
-
 	return runtimeConfig{
-		AllowedNS:   allowedNS,
-		Target:      t,
-		DryRun:      dryRun,
-		Offline:     offline,
-		StartupPush: startupPush,
+		AllowedNS: allowedNS,
+		Target:    t,
+		DryRun:    dryRun,
+		Offline:   offline,
 	}, nil
 }
