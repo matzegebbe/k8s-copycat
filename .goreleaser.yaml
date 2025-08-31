@@ -1,0 +1,72 @@
+version: 2
+project_name: k8s-copycat
+
+
+before:
+  hooks:
+    - go mod download
+    - go generate ./...
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - 6
+      - 7
+    main: ./cmd/manager/
+    binary: k8s-copycat
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - none*
+
+release:
+  draft: false
+  prerelease: false
+
+dockers:
+  - id: linux-amd64
+    use: buildx
+    goos: linux
+    goarch: amd64
+    dockerfile: Dockerfile-goreleaser
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.name={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+      - "--platform=linux/amd64"
+    image_templates:
+      - "ghcr.io/matzegebbe/k8s-copycat:v{{ .Version }}-amd64"
+  - id: linux-arm64
+    use: buildx
+    goos: linux
+    goarch: arm64
+    dockerfile: Dockerfile-goreleaser
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
+      - "--label=org.opencontainers.image.name={{ .ProjectName }}"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.source={{ .GitURL }}"
+      - "--platform=linux/arm64"
+    image_templates:
+      - "ghcr.io/matzegebbe/k8s-copycat:v{{ .Version }}-arm64"
+
+docker_manifests:
+- name_template: "ghcr.io/matzegebbe/k8s-copycat:v{{ .Version }}"
+  image_templates:
+  - "ghcr.io/matzegebbe/k8s-copycat:v{{ .Version }}-amd64"
+  - "ghcr.io/matzegebbe/k8s-copycat:v{{ .Version }}-arm64"
