@@ -6,7 +6,7 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/matzegebbe/doppler/pkg/util"
+	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
 
 // FilePath returns default config path inside the container.

@@ -1,6 +1,6 @@
-# Doppler — minimal k8s-image-doppler
+# k8s-copycat for container images
 
-![doppler logo](doppler-logo.png)
+![k8s-copycat logo](k8s-copycat-logo.png)
 
 - Watches **Deployments**, **StatefulSets**, **Jobs**, **CronJobs** and **Pods**
 - Mirrors container images to **AWS ECR** (via AWS SDK v2 + IRSA) or a **generic Docker registry**
@@ -29,7 +29,7 @@ Rules are evaluated in order with the first matching entry applied. Leaving
 
 ## Build container
 ```bash
-docker build -t ghcr.io/matzegebbe/k8s-image-doppler:latest .
+docker build -t ghcr.io/matzegebbe/k8s-copycat:latest .
 ```
 
 ## How it works
@@ -38,11 +38,11 @@ docker build -t ghcr.io/matzegebbe/k8s-image-doppler:latest .
 
 ## Dry Run Mode
 
-You can run Doppler in dry run mode to simulate image pushes without actually pushing them. This is useful for testing and validation.
+You can run k8s-copycat in dry run mode to simulate image pushes without actually pushing them. This is useful for testing and validation.
 
 Enable dry run mode by either:
 - Passing the `--dry-run` flag to the binary
 - Setting `dryRun: true` in your config file
 
-In dry run mode, Doppler will log the actions it would take instead of pushing images.
+In dry run mode, k8s-copycat will log the actions it would take instead of pushing images.
 

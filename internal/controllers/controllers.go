@@ -15,8 +15,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
-	"github.com/matzegebbe/doppler/internal/mirror"
-	"github.com/matzegebbe/doppler/pkg/util"
+	"github.com/matzegebbe/k8s-copycat/internal/mirror"
+	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
 
 const (
