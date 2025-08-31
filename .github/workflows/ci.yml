@@ -26,8 +26,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Prepare branch slug
         run: |
-          BRANCH_SLUG="${GITHUB_REF_NAME//\//-}"
+          BRANCH_SLUG=$(echo "${GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]')
+          BRANCH_SLUG=$(echo "${BRANCH_SLUG}" | tr -cs 'a-z0-9._-' '-')
           BRANCH_SLUG="${BRANCH_SLUG##-}"
+          BRANCH_SLUG="${BRANCH_SLUG%%-}"
           echo "BRANCH_SLUG=${BRANCH_SLUG}" >> $GITHUB_ENV
       - name: Run tests
         run: go test ./...
