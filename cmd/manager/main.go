@@ -44,7 +44,9 @@ func main() {
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "health probe bind address")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", true, "enable leader election")
 	var dryRunFlag bool
+	var offlineFlag bool
 	flag.BoolVar(&dryRunFlag, "dry-run", false, "simulate image push without actually pushing")
+	flag.BoolVar(&offlineFlag, "offline", false, "simulate image push without contacting target registry")
 	opts := zap.Options{Development: false}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -177,6 +179,18 @@ func main() {
 		dryRun = dryRunFlag || fileCfg.DryRun
 	}
 
+	// OFFLINE env var takes highest precedence
+	offlineEnv := os.Getenv("OFFLINE")
+	offline := false
+	if offlineEnv != "" {
+		val := strings.ToLower(strings.TrimSpace(offlineEnv))
+		if val == "1" || val == "true" || val == "yes" {
+			offline = true
+		}
+	} else {
+		offline = offlineFlag || fileCfg.Offline
+	}
+
 	startupPush := true
 	if fileCfg.StartupPush != nil {
 		startupPush = *fileCfg.StartupPush
@@ -187,7 +201,7 @@ func main() {
 		}
 	}
 
-	pusher := mirror.NewPusher(t, dryRun)
+	pusher := mirror.NewPusher(t, dryRun, offline)
 	if err := controllers.SetupAll(mgr, pusher, allowedNS); err != nil {
 		logger.Error(err, "setup controllers failed")
 		os.Exit(1)

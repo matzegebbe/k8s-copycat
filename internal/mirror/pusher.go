@@ -24,12 +24,13 @@ type Pusher interface {
 }
 
 type pusher struct {
-	target registry.Target
-	dryRun bool
+	target  registry.Target
+	dryRun  bool
+	offline bool
 }
 
-func NewPusher(t registry.Target, dryRun bool) Pusher {
-	return &pusher{target: t, dryRun: dryRun}
+func NewPusher(t registry.Target, dryRun, offline bool) Pusher {
+	return &pusher{target: t, dryRun: dryRun, offline: offline}
 }
 
 func transport(insecure bool) http.RoundTripper {
@@ -55,16 +56,6 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return fmt.Errorf("parse source: %w", err)
 	}
 
-	img, err := remote.Image(srcRef, remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure())))
-	if err != nil {
-		return fmt.Errorf("pull %s: %w", src, err)
-	}
-
-	digest, err := img.Digest()
-	if err != nil {
-		return fmt.Errorf("digest: %w", err)
-	}
-
 	// Build target repo path
 	srcRepo := srcRef.Context().RepositoryStr()
 	repo := util.CleanRepoName(srcRepo)
@@ -72,15 +63,25 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		repo = strings.TrimSuffix(pref, "/") + "/" + repo
 	}
 
-	// Tag: keep if present, else digest-based
+	// Tag: keep if present, else digest-based using reference digest
 	var tag string
 	if t, ok := srcRef.(name.Tag); ok {
 		tag = t.TagStr()
 	} else {
-		tag = "mirror-" + util.ShortDigest(digest.String())
+		tag = "mirror-" + util.ShortDigest(srcRef.Identifier())
 	}
 
 	target := fmt.Sprintf("%s/%s:%s", p.target.Registry(), repo, tag)
+	if p.offline {
+		fmt.Printf("[OFFLINE] Would push image %s to %s\n", src, target)
+		return nil
+	}
+
+	img, err := remote.Image(srcRef, remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure())))
+	if err != nil {
+		return fmt.Errorf("pull %s: %w", src, err)
+	}
+
 	username, password, err := p.target.BasicAuth(ctx)
 	if err != nil {
 		return fmt.Errorf("auth: %w", err)

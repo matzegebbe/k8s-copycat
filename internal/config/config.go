@@ -29,6 +29,7 @@ type Config struct {
 	ECR         ECR    `yaml:"ecr"`
 	Docker      Docker `yaml:"docker"`
 	DryRun      bool   `yaml:"dryRun"`
+	Offline     bool   `yaml:"offline"`
 	StartupPush *bool  `yaml:"startupPush"`
 }
 
