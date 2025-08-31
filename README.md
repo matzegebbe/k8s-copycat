@@ -1,4 +1,4 @@
-# k8s-copycat — K8s copycat for Container Images
+# k8s-copycat for container images
 
 ![k8s-copycat logo](k8s-copycat-logo.png)
 
