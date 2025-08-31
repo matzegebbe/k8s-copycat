@@ -4,8 +4,6 @@ import (
 	"context"
 	"flag"
 	"os"
-	"strconv"
-	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -21,10 +19,8 @@ import (
 
 	"github.com/go-logr/logr"
 
-	"github.com/matzegebbe/doppler/internal/config"
 	"github.com/matzegebbe/doppler/internal/controllers"
 	"github.com/matzegebbe/doppler/internal/mirror"
-	"github.com/matzegebbe/doppler/internal/registry"
 	"github.com/matzegebbe/doppler/pkg/util"
 )
 
@@ -54,20 +50,11 @@ func main() {
 
 	logger := zap.New(zap.UseFlagOptions(&opts))
 	ctrl.SetLogger(logger)
-
-	includeEnv := os.Getenv("INCLUDE_NAMESPACES")
-	if includeEnv == "" {
-		includeEnv = "*"
-	}
-	rawNS := strings.Split(includeEnv, ",")
-	allowedNS := make([]string, 0, len(rawNS))
-	for _, ns := range rawNS {
-		if trimmed := strings.TrimSpace(ns); trimmed != "" {
-			allowedNS = append(allowedNS, trimmed)
-		}
-	}
-	if len(allowedNS) == 0 {
-		allowedNS = []string{"*"}
+	ctx := context.Background()
+	cfg, err := loadRuntimeConfig(ctx, dryRunFlag, offlineFlag)
+	if err != nil {
+		logger.Error(err, "resolve configuration failed")
+		os.Exit(1)
 	}
 
 	mgrOpts := ctrl.Options{
@@ -77,8 +64,8 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "doppler.k8s-image-doppler",
 	}
-	if !(len(allowedNS) == 1 && strings.TrimSpace(allowedNS[0]) == "*") {
-		mgrOpts.NewCache = cache.MultiNamespacedCacheBuilder(allowedNS)
+	if !(len(cfg.AllowedNS) == 1 && cfg.AllowedNS[0] == "*") {
+		mgrOpts.NewCache = cache.MultiNamespacedCacheBuilder(cfg.AllowedNS)
 	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
 	if err != nil {
@@ -86,142 +73,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := context.Background()
-
-	cfgPath := os.Getenv("CONFIG_PATH")
-	if cfgPath == "" {
-		cfgPath = config.FilePath
-	}
-	fileCfg, ok, err := config.Load(cfgPath)
-	if err != nil {
-		logger.Error(err, "failed to load config file", "path", cfgPath)
-		os.Exit(1)
-	}
-
-	targetKind := os.Getenv("TARGET_KIND")
-	if targetKind == "" && ok {
-		targetKind = strings.ToLower(strings.TrimSpace(fileCfg.TargetKind))
-	}
-	if targetKind == "" {
-		targetKind = "ecr"
-	}
-
-	var t registry.Target
-	switch targetKind {
-	case "ecr":
-		// env overrides config file
-		eAccount := fileCfg.ECR.AccountID
-		if v := os.Getenv("ECR_ACCOUNT_ID"); v != "" {
-			eAccount = v
-		}
-		eRegion := fileCfg.ECR.Region
-		if v := os.Getenv("AWS_REGION"); v != "" {
-			eRegion = v
-		}
-		ePrefix := fileCfg.ECR.RepoPrefix
-		if v := os.Getenv("ECR_REPO_PREFIX"); v != "" {
-			ePrefix = v
-		}
-		eCreate := true
-		if fileCfg.ECR.CreateRepo != nil {
-			eCreate = *fileCfg.ECR.CreateRepo
-		}
-		if v := os.Getenv("ECR_CREATE_REPO"); v == "false" {
-			eCreate = false
-		}
-
-		cfg := registry.ECRConfig{
-			AccountID:  eAccount,
-			Region:     eRegion,
-			RepoPrefix: ePrefix,
-			CreateRepo: eCreate,
-		}
-		if cfg.AccountID == "" || cfg.Region == "" {
-			logger.Error(nil, "for TARGET_KIND=ecr set ECR_ACCOUNT_ID and AWS_REGION (via ConfigMap or env)")
-			os.Exit(1)
-		}
-		t, err = registry.NewECR(ctx, cfg)
-
-	case "docker":
-		dRegistry := fileCfg.Docker.Registry
-		if v := os.Getenv("TARGET_REGISTRY"); v != "" {
-			dRegistry = v
-		}
-		dPrefix := fileCfg.Docker.RepoPrefix
-		if v := os.Getenv("TARGET_REPO_PREFIX"); v != "" {
-			dPrefix = v
-		}
-		dInsecure := fileCfg.Docker.Insecure
-		if v := os.Getenv("TARGET_INSECURE"); v != "" {
-			if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
-				dInsecure = parsed
-			}
-		}
-		d := registry.DockerConfig{
-			Registry:   dRegistry,
-			RepoPrefix: dPrefix,
-			Username:   os.Getenv("TARGET_USERNAME"),
-			Password:   os.Getenv("TARGET_PASSWORD"),
-			Insecure:   dInsecure,
-		}
-		if d.Registry == "" {
-			logger.Error(nil, "for TARGET_KIND=docker set TARGET_REGISTRY (via ConfigMap or env)")
-			os.Exit(1)
-		}
-		t, err = registry.NewDocker(d)
-
-	default:
-		logger.Error(nil, "unknown TARGET_KIND", "TARGET_KIND", targetKind)
-		os.Exit(1)
-	}
-	if err != nil {
-		logger.Error(err, "init registry target failed")
-		os.Exit(1)
-	}
-
-	// DRY_RUN env var takes highest precedence
-	dryRunEnv := os.Getenv("DRY_RUN")
-	dryRun := false
-	if dryRunEnv != "" {
-		val := strings.ToLower(strings.TrimSpace(dryRunEnv))
-		if val == "1" || val == "true" || val == "yes" {
-			dryRun = true
-		}
-	} else {
-		dryRun = dryRunFlag || fileCfg.DryRun
-	}
-
-	// OFFLINE env var takes highest precedence
-	offlineEnv := os.Getenv("OFFLINE")
-	offline := false
-	if offlineEnv != "" {
-		val := strings.ToLower(strings.TrimSpace(offlineEnv))
-		if val == "1" || val == "true" || val == "yes" {
-			offline = true
-		}
-	} else {
-		offline = offlineFlag || fileCfg.Offline
-	}
-
-	startupPush := true
-	if fileCfg.StartupPush != nil {
-		startupPush = *fileCfg.StartupPush
-	}
-	if v, ok := os.LookupEnv("STARTUP_PUSH"); ok {
-		if parsed, err := strconv.ParseBool(strings.TrimSpace(v)); err == nil {
-			startupPush = parsed
-		}
-	}
-
-	pusher := mirror.NewPusher(t, dryRun, offline)
-	if err := controllers.SetupAll(mgr, pusher, allowedNS); err != nil {
+	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, cfg.Offline)
+	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS); err != nil {
 		logger.Error(err, "setup controllers failed")
 		os.Exit(1)
 	}
 
 	// Register startup image push as a Runnable
-	if startupPush {
-		if err := mgr.Add(&StartupImagePush{Client: mgr.GetClient(), AllowedNS: allowedNS, Pusher: pusher, Logger: logger}); err != nil {
+	if cfg.StartupPush {
+		if err := mgr.Add(&StartupImagePush{Client: mgr.GetClient(), AllowedNS: cfg.AllowedNS, Pusher: pusher, Logger: logger}); err != nil {
 			logger.Error(err, "failed to add startup image push runnable")
 			os.Exit(1)
 		}
