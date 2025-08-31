@@ -18,6 +18,7 @@ import (
 
 	"github.com/matzegebbe/doppler/internal/controllers"
 	"github.com/matzegebbe/doppler/internal/mirror"
+	"github.com/matzegebbe/doppler/pkg/util"
 )
 
 var scheme = runtime.NewScheme()
@@ -73,7 +74,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, cfg.Offline)
+	transformer := util.NewRepoPathTransformer(cfg.PathMap)
+	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, cfg.Offline, transformer)
 	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS); err != nil {
 		logger.Error(err, "setup controllers failed")
 		os.Exit(1)

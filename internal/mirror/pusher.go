@@ -25,15 +25,19 @@ type Pusher interface {
 }
 
 type pusher struct {
-	target  registry.Target
-	dryRun  bool
-	offline bool
-	mu      sync.Mutex
-	pushed  map[string]struct{}
+	target    registry.Target
+	dryRun    bool
+	offline   bool
+	transform func(string) string
+	mu        sync.Mutex
+	pushed    map[string]struct{}
 }
 
-func NewPusher(t registry.Target, dryRun, offline bool) Pusher {
-	return &pusher{target: t, dryRun: dryRun, offline: offline, pushed: make(map[string]struct{})}
+func NewPusher(t registry.Target, dryRun, offline bool, transform func(string) string) Pusher {
+	if transform == nil {
+		transform = util.CleanRepoName
+	}
+	return &pusher{target: t, dryRun: dryRun, offline: offline, transform: transform, pushed: make(map[string]struct{})}
 }
 
 func transport(insecure bool) http.RoundTripper {
@@ -61,7 +65,7 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 
 	// Build target repo path
 	srcRepo := srcRef.Context().RepositoryStr()
-	repo := util.CleanRepoName(srcRepo)
+	repo := p.transform(srcRepo)
 	if pref := p.target.RepoPrefix(); pref != "" {
 		repo = strings.TrimSuffix(pref, "/") + "/" + repo
 	}

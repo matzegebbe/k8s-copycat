@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"sigs.k8s.io/yaml"
+
+	"github.com/matzegebbe/doppler/pkg/util"
 )
 
 // FilePath returns default config path inside the container.
@@ -25,11 +27,12 @@ type Docker struct {
 }
 
 type Config struct {
-	TargetKind string `yaml:"targetKind"` // ecr | docker
-	ECR        ECR    `yaml:"ecr"`
-	Docker     Docker `yaml:"docker"`
-	DryRun     bool   `yaml:"dryRun"`
-	Offline    bool   `yaml:"offline"`
+	TargetKind string             `yaml:"targetKind"` // ecr | docker
+	ECR        ECR                `yaml:"ecr"`
+	Docker     Docker             `yaml:"docker"`
+	DryRun     bool               `yaml:"dryRun"`
+	Offline    bool               `yaml:"offline"`
+	PathMap    []util.PathMapping `yaml:"pathMap"`
 }
 
 func Load(path string) (Config, bool, error) {

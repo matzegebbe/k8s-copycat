@@ -11,6 +11,21 @@
 - `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO` (for ECR)
 - `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD`, `TARGET_INSECURE` (for Docker)
 - `INCLUDE_NAMESPACES`: `*` or comma list (e.g., `default,prod`)
+- Optional `pathMap` in the config file rewrites repository paths before pushing
+
+Example `config.yaml` snippet:
+
+```yaml
+pathMap:
+  - from: "group/project"
+    to: "prod/project"
+  - from: "^legacy/(.*)"
+    to: "modern/$1"
+    regex: true
+```
+
+Rules are evaluated in order with the first matching entry applied. Leaving
+`pathMap` empty keeps repository paths unchanged.
 
 ## Build container
 ```bash
