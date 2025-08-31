@@ -9,6 +9,7 @@ import (
 
 	"github.com/matzegebbe/doppler/internal/config"
 	"github.com/matzegebbe/doppler/internal/registry"
+	"github.com/matzegebbe/doppler/pkg/util"
 )
 
 // runtimeConfig holds all runtime configuration derived from flags, env vars and the config file.
@@ -17,6 +18,7 @@ type runtimeConfig struct {
 	Target    registry.Target
 	DryRun    bool
 	Offline   bool
+	PathMap   []util.PathMapping
 }
 
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
@@ -147,5 +149,6 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, offlineFlag bool) (runti
 		Target:    t,
 		DryRun:    dryRun,
 		Offline:   offline,
+		PathMap:   fileCfg.PathMap,
 	}, nil
 }
