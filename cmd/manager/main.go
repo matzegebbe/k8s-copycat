@@ -236,32 +236,24 @@ func (s *StartupImagePush) Start(ctx context.Context) error {
 				return err
 			}
 			for _, nsObj := range nsList.Items {
-				pushImagesInNamespace(ctx, s.Client, nsObj.Name, s.Pusher, s.Logger, s.Pusher.DryRun())
+				pushImagesInNamespace(ctx, s.Client, nsObj.Name, s.Pusher, s.Logger)
 			}
 		} else {
-			pushImagesInNamespace(ctx, s.Client, ns, s.Pusher, s.Logger, s.Pusher.DryRun())
+			pushImagesInNamespace(ctx, s.Client, ns, s.Pusher, s.Logger)
 		}
 	}
 	return nil
 }
 
 // Helper function to push all images in a namespace
-func pushImagesInNamespace(ctx context.Context, k8sClient client.Client, namespace string, pusher mirror.Pusher, logger logr.Logger, dryRun bool) {
+func pushImagesInNamespace(ctx context.Context, k8sClient client.Client, namespace string, pusher mirror.Pusher, logger logr.Logger) {
 	var podList corev1.PodList
 	if err := k8sClient.List(ctx, &podList, client.InNamespace(namespace)); err != nil {
 		logger.Error(err, "failed to list pods", "namespace", namespace)
 		return
 	}
-	imageSet := map[string]struct{}{}
 	for _, pod := range podList.Items {
 		for _, img := range util.ImagesFromPodSpec(&pod.Spec) {
-			imageSet[img] = struct{}{}
-		}
-	}
-	for img := range imageSet {
-		if dryRun {
-			logger.Info("try to push image", "image", img)
-		} else {
 			if err := pusher.Mirror(ctx, img); err != nil {
 				logger.Error(err, "failed to push image", "image", img)
 			}

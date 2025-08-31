@@ -12,6 +12,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	remotetransport "github.com/google/go-containerregistry/pkg/v1/remote/transport"
 
 	"github.com/matzegebbe/doppler/internal/registry"
 	"github.com/matzegebbe/doppler/pkg/util"
@@ -71,10 +72,6 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		repo = strings.TrimSuffix(pref, "/") + "/" + repo
 	}
 
-	if err := p.target.EnsureRepository(ctx, repo); err != nil {
-		return fmt.Errorf("ensure repo %s: %w", repo, err)
-	}
-
 	// Tag: keep if present, else digest-based
 	var tag string
 	if t, ok := srcRef.(name.Tag); ok {
@@ -97,6 +94,22 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 	targetRef, err := name.NewTag(target, opts...)
 	if err != nil {
 		return fmt.Errorf("parse target: %w", err)
+	}
+
+	// Skip if image already exists in target registry
+	if _, err := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err == nil {
+		if p.dryRun {
+			fmt.Printf("[DRY RUN] Image %s already present at %s\n", src, target)
+		}
+		return nil
+	} else if te, ok := err.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
+		// continue to push
+	} else if err != nil {
+		return fmt.Errorf("check %s: %w", target, err)
+	}
+
+	if err := p.target.EnsureRepository(ctx, repo); err != nil {
+		return fmt.Errorf("ensure repo %s: %w", repo, err)
 	}
 
 	if p.dryRun {
