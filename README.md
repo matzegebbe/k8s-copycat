@@ -1,3 +1,8 @@
+# ⚠️ Disclaimer
+
+This is an **absolutely experimental WIP project**.
+Do **not** use it in production environments.
+
 # k8s-copycat for Container Images
 
 ![k8s-copycat logo](k8s-copycat-logo.png)
