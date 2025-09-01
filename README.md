@@ -27,6 +27,8 @@ images running in our cluster—**without swapping them out**—this project was
 Yes, there are pull-through proxies like Harbor or other caching options.
 But the goal here is different: to maintain a **dedicated registry** that holds all the critical images we need, so we can access them instantly when it really matters.
 
+Additionally, we explicitly want a solution **not using admission webhooks**. In our case, we always have to work with proxies through EKS/Cilium nodeport availability. See [cilium/cilium#21959](https://github.com/cilium/cilium/issues/21959) for more context.
+
 **Inspired by:**
 [estahn/k8s-image-swapper](https://github.com/estahn/k8s-image-swapper)
 
