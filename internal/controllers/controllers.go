@@ -65,6 +65,8 @@ func (r *baseReconciler) processPodSpec(ctx context.Context, ns string, spec *co
 type DeploymentReconciler struct{ baseReconciler }
 
 func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx)
+	log.Info("saw Deployment", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
@@ -85,6 +87,8 @@ func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 type StatefulSetReconciler struct{ baseReconciler }
 
 func (r *StatefulSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx)
+	log.Info("saw StatefulSet", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
@@ -105,6 +109,8 @@ func (r *StatefulSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 type JobReconciler struct{ baseReconciler }
 
 func (r *JobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx)
+	log.Info("saw Job", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
@@ -125,6 +131,8 @@ func (r *JobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 type CronJobReconciler struct{ baseReconciler }
 
 func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx)
+	log.Info("saw CronJob", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
@@ -145,6 +153,8 @@ func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 type PodReconciler struct{ baseReconciler }
 
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx)
+	log.Info("saw Pod", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
