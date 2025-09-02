@@ -1,4 +1,4 @@
 FROM alpine:3.22.1
 COPY k8s-copycat /
 RUN apk --no-cache add ca-certificates
-ENTRYPOINT ["/web-jwks-validator"]
+ENTRYPOINT ["/k8s-copycat"]
