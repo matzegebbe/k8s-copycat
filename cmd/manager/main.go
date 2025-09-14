@@ -36,7 +36,7 @@ func main() {
 	var probeAddr string
 	var enableLeaderElection bool
 
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "metrics bind address")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "metrics bind addres")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "health probe bind address")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", true, "enable leader election")
 	var dryRunFlag bool
