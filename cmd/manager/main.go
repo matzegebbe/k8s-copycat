@@ -63,7 +63,7 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "k8s-copycat.k8s-copycat",
 	}
-	if !(len(cfg.AllowedNS) == 1 && cfg.AllowedNS[0] == "*") {
+	if len(cfg.AllowedNS) != 1 && cfg.AllowedNS[0] != "*" {
 		nsMap := make(map[string]cache.Config, len(cfg.AllowedNS))
 		for _, ns := range cfg.AllowedNS {
 			nsMap[ns] = cache.Config{}
