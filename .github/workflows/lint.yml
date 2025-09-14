@@ -1,0 +1,45 @@
+name: Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  fmt:
+    name: Check format and lint
+    strategy:
+      matrix:
+        go: [stable]
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ${{ matrix.go }}
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.1
+  commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: commit-check/commit-check-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          message: true
+          branch: true
+          author-name: true
+          author-email: true
+          commit-signoff: false
+          merge-base: true
+          imperative: false
+          job-summary: true
