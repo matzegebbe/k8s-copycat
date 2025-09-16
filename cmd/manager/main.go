@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -47,14 +48,19 @@ func main() {
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
-	logger := zap.New(zap.UseFlagOptions(&opts))
-	ctrl.SetLogger(logger)
 	ctx := context.Background()
 	cfg, err := loadRuntimeConfig(ctx, dryRunFlag, offlineFlag)
 	if err != nil {
-		logger.Error(err, "resolve configuration failed")
+		fmt.Fprintf(os.Stderr, "resolve configuration failed: %v\n", err)
 		os.Exit(1)
 	}
+
+	if opts.Level == nil && cfg.LogLevel != nil {
+		opts.Level = cfg.LogLevel
+	}
+
+	logger := zap.New(zap.UseFlagOptions(&opts))
+	ctrl.SetLogger(logger)
 
 	mgrOpts := ctrl.Options{
 		Scheme:                 scheme,
@@ -77,9 +83,14 @@ func main() {
 	}
 
 	transformer := util.NewRepoPathTransformer(cfg.PathMap)
-	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, cfg.Offline, transformer)
-	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS); err != nil {
+	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, cfg.Offline, transformer, cfg.PushInterval)
+	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.Debug); err != nil {
 		logger.Error(err, "setup controllers failed")
+		os.Exit(1)
+	}
+
+	if err := registerCacheAdminEndpoints(mgr, pusher); err != nil {
+		logger.Error(err, "register cache admin handlers failed")
 		os.Exit(1)
 	}
 

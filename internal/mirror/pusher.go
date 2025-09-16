@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -24,20 +25,110 @@ type Pusher interface {
 	DryRun() bool
 }
 
-type pusher struct {
-	target    registry.Target
-	dryRun    bool
-	offline   bool
-	transform func(string) string
-	mu        sync.Mutex
-	pushed    map[string]struct{}
+type ErrThrottled struct {
+	Target string
+	Wait   time.Duration
 }
 
-func NewPusher(t registry.Target, dryRun, offline bool, transform func(string) string) Pusher {
+func (e ErrThrottled) Error() string {
+	return fmt.Sprintf("throttled push for %s; retry in %s", e.Target, e.Wait)
+}
+
+type pushRecord struct {
+	digest   string
+	lastPush time.Time
+	inflight bool
+}
+
+type pusher struct {
+	target       registry.Target
+	dryRun       bool
+	offline      bool
+	transform    func(string) string
+	pushInterval time.Duration
+	mu           sync.Mutex
+	pushed       map[string]pushRecord
+}
+
+// CacheEntry describes a cached target reference and the digest recorded for it.
+type CacheEntry struct {
+	Target   string    `json:"target"`
+	Digest   string    `json:"digest"`
+	LastPush time.Time `json:"lastPush"`
+	Inflight bool      `json:"inflight"`
+}
+
+func NewPusher(t registry.Target, dryRun, offline bool, transform func(string) string, interval time.Duration) Pusher {
 	if transform == nil {
 		transform = util.CleanRepoName
 	}
-	return &pusher{target: t, dryRun: dryRun, offline: offline, transform: transform, pushed: make(map[string]struct{})}
+	if interval < 0 {
+		interval = 0
+	}
+	return &pusher{target: t, dryRun: dryRun, offline: offline, transform: transform, pushInterval: interval, pushed: make(map[string]pushRecord)}
+}
+
+// ResetCache removes all cached push records and returns the targets that were cleared.
+func (p *pusher) ResetCache() []string {
+	p.mu.Lock()
+	removed := make([]string, 0, len(p.pushed))
+	for target := range p.pushed {
+		removed = append(removed, target)
+	}
+	p.pushed = make(map[string]pushRecord)
+	p.mu.Unlock()
+
+	sort.Strings(removed)
+	return removed
+}
+
+// Evict removes an exact target reference from the cache.
+func (p *pusher) Evict(target string) bool {
+	if target == "" {
+		return false
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, ok := p.pushed[target]; ok {
+		delete(p.pushed, target)
+		return true
+	}
+	return false
+}
+
+// EvictPrefix removes cached entries whose target matches the provided prefix and
+// returns the evicted targets in lexical order.
+func (p *pusher) EvictPrefix(prefix string) []string {
+	if prefix == "" {
+		return nil
+	}
+	p.mu.Lock()
+	removed := make([]string, 0)
+	for target := range p.pushed {
+		if strings.HasPrefix(target, prefix) {
+			delete(p.pushed, target)
+			removed = append(removed, target)
+		}
+	}
+	p.mu.Unlock()
+
+	sort.Strings(removed)
+	return removed
+}
+
+// CacheEntries returns a snapshot of the cached push records for observability purposes.
+func (p *pusher) CacheEntries() []CacheEntry {
+	p.mu.Lock()
+	entries := make([]CacheEntry, 0, len(p.pushed))
+	for target, rec := range p.pushed {
+		entries = append(entries, CacheEntry{Target: target, Digest: rec.digest, LastPush: rec.lastPush, Inflight: rec.inflight})
+	}
+	p.mu.Unlock()
+
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].Target < entries[j].Target
+	})
+	return entries
 }
 
 func transport(insecure bool) http.RoundTripper {
@@ -63,7 +154,6 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return fmt.Errorf("parse source: %w", err)
 	}
 
-	// Build target repo path
 	srcRepo := srcRef.Context().RepositoryStr()
 	repo := p.transform(srcRepo)
 	if pref := p.target.RepoPrefix(); pref != "" {
@@ -90,19 +180,53 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return fmt.Errorf("parse target: %w", err)
 	}
 
-	p.mu.Lock()
-	if _, exists := p.pushed[target]; exists {
-		p.mu.Unlock()
-		if p.dryRun {
-			fmt.Printf("[DRY RUN] Image %s already processed this run\n", src)
+	throttleWait := func() time.Duration {
+		if p.pushInterval > 0 {
+			return p.pushInterval
 		}
-		return nil
+		return time.Second
 	}
-	p.pushed[target] = struct{}{}
+
+	p.mu.Lock()
+	rec := p.pushed[target]
+	if rec.inflight {
+		wait := throttleWait()
+		p.mu.Unlock()
+		fmt.Printf("Throttled concurrent push for %s to %s; retry in %s\n", src, target, wait)
+		return ErrThrottled{Target: target, Wait: wait}
+	}
+	if p.pushInterval > 0 && !rec.lastPush.IsZero() {
+		if elapsed := time.Since(rec.lastPush); elapsed < p.pushInterval {
+			wait := p.pushInterval - elapsed
+			p.mu.Unlock()
+			if p.dryRun {
+				fmt.Printf("[DRY RUN] Throttled push for %s to %s; retry in %s\n", src, target, wait)
+			} else {
+				fmt.Printf("Throttled push for %s to %s; retry in %s\n", src, target, wait)
+			}
+			return ErrThrottled{Target: target, Wait: wait}
+		}
+	}
+	rec.inflight = true
+	p.pushed[target] = rec
 	p.mu.Unlock()
+
+	defer func() {
+		p.mu.Lock()
+		if current, ok := p.pushed[target]; ok {
+			current.inflight = false
+			p.pushed[target] = current
+		}
+		p.mu.Unlock()
+	}()
 
 	if p.offline {
 		fmt.Printf("[OFFLINE] Would push image %s to %s\n", src, target)
+		p.mu.Lock()
+		rec := p.pushed[target]
+		rec.lastPush = time.Now()
+		p.pushed[target] = rec
+		p.mu.Unlock()
 		return nil
 	}
 
@@ -114,6 +238,30 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return fmt.Errorf("pull %s: %w", src, err)
 	}
 
+	srcDigest, err := img.Digest()
+	if err != nil {
+		p.mu.Lock()
+		delete(p.pushed, target)
+		p.mu.Unlock()
+		return fmt.Errorf("digest %s: %w", src, err)
+	}
+	srcDigestStr := srcDigest.String()
+
+	p.mu.Lock()
+	rec = p.pushed[target]
+	if rec.digest == srcDigestStr {
+		rec.lastPush = time.Now()
+		p.pushed[target] = rec
+		p.mu.Unlock()
+		if p.dryRun {
+			fmt.Printf("[DRY RUN] Image %s already processed with digest %s this run\n", src, srcDigestStr)
+		} else {
+			fmt.Printf("Image %s already processed with digest %s this run\n", src, srcDigestStr)
+		}
+		return nil
+	}
+	p.mu.Unlock()
+
 	username, password, err := p.target.BasicAuth(ctx)
 	if err != nil {
 		p.mu.Lock()
@@ -124,12 +272,23 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 
 	auth := &authn.Basic{Username: username, Password: password}
 
-	// Skip if image already exists in target registry
-	if _, err := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err == nil {
-		if p.dryRun {
-			fmt.Printf("[DRY RUN] Image %s already present at %s\n", src, target)
+	desc, err := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure())))
+	if err == nil {
+		if desc.Digest == srcDigest {
+			p.mu.Lock()
+			rec = p.pushed[target]
+			rec.digest = srcDigestStr
+			rec.lastPush = time.Now()
+			p.pushed[target] = rec
+			p.mu.Unlock()
+			if p.dryRun {
+				fmt.Printf("[DRY RUN] Image %s already present at %s (digest %s)\n", src, target, srcDigestStr)
+			} else {
+				fmt.Printf("Image %s already present at %s (digest %s)\n", src, target, srcDigestStr)
+			}
+			return nil
 		}
-		return nil
+		fmt.Printf("Updating %s at %s (digest %s -> %s)\n", src, target, desc.Digest.String(), srcDigestStr)
 	} else if te, ok := err.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
 		// continue to push
 	} else if err != nil {
@@ -147,17 +306,31 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 	}
 
 	if p.dryRun {
-		fmt.Printf("[DRY RUN] Would push image %s to %s\n", src, target)
+		fmt.Printf("[DRY RUN] Would push image %s (digest %s) to %s\n", src, srcDigestStr, target)
+		p.mu.Lock()
+		rec = p.pushed[target]
+		rec.lastPush = time.Now()
+		p.pushed[target] = rec
+		p.mu.Unlock()
 		return nil
 	}
-	fmt.Printf("Pushing image %s to %s\n", src, target)
+
+	fmt.Printf("Pushing image %s (digest %s) to %s\n", src, srcDigestStr, target)
 	if err := remote.Write(targetRef, img, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err != nil {
 		p.mu.Lock()
 		delete(p.pushed, target)
 		p.mu.Unlock()
 		return fmt.Errorf("push %s: %w", target, err)
 	}
-	fmt.Printf("Finished pushing image %s to %s\n", src, target)
+	fmt.Printf("Finished pushing image %s (digest %s) to %s\n", src, srcDigestStr, target)
+
+	p.mu.Lock()
+	rec = p.pushed[target]
+	rec.digest = srcDigestStr
+	rec.lastPush = time.Now()
+	p.pushed[target] = rec
+	p.mu.Unlock()
+
 	return nil
 }
 

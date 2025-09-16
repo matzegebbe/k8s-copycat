@@ -86,6 +86,9 @@ spec:
             #  value: "/config/config.yaml"
             - name: INCLUDE_NAMESPACES
               value: "test"
+            # throttle pushes per image reference (e.g., 1m, 30s)
+            #- name: PUSH_INTERVAL
+            #  value: "1m"
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits:   { cpu: 500m, memory: 256Mi }
@@ -125,6 +128,12 @@ metadata:
 data:
   config.yaml: |
     targetKind: ecr        # ecr | docker
+    debug: true            # emit debug-level controller logs
+    logLevel: debug        # debug | info | warn | error | panic | numeric verbosity
+    includeNamespaces:
+      - test
+      - other
+    pushInterval: 1m
     ecr:
       accountID: "123456789012"
       region: "eu-central-1"

@@ -3,6 +3,7 @@ package config
 import (
 	"io/fs"
 	"os"
+	"time"
 
 	"sigs.k8s.io/yaml"
 
@@ -32,7 +33,13 @@ type Config struct {
 	Docker     Docker             `yaml:"docker"`
 	DryRun     bool               `yaml:"dryRun"`
 	Offline    bool               `yaml:"offline"`
+	Debug      bool               `yaml:"debug"`
+	LogLevel   string             `yaml:"logLevel"`
 	PathMap    []util.PathMapping `yaml:"pathMap"`
+	// IncludeNamespaces allows restricting watched namespaces via config.
+	IncludeNamespaces []string `yaml:"includeNamespaces"`
+	// PushInterval optionally throttles pushes to the target registry.
+	PushInterval time.Duration `yaml:"pushInterval"`
 }
 
 func Load(path string) (Config, bool, error) {

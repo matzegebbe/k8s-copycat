@@ -6,6 +6,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/matzegebbe/k8s-copycat/internal/config"
 	"github.com/matzegebbe/k8s-copycat/internal/registry"
@@ -14,30 +18,46 @@ import (
 
 // runtimeConfig holds all runtime configuration derived from flags, env vars and the config file.
 type runtimeConfig struct {
-	AllowedNS []string
-	Target    registry.Target
-	DryRun    bool
-	Offline   bool
-	PathMap   []util.PathMapping
+	AllowedNS    []string
+	Target       registry.Target
+	DryRun       bool
+	Offline      bool
+	Debug        bool
+	PathMap      []util.PathMapping
+	PushInterval time.Duration
+	LogLevel     zapcore.LevelEnabler
+}
+
+var logLevelStrings = map[string]zapcore.Level{
+	"debug":   zapcore.DebugLevel,
+	"info":    zapcore.InfoLevel,
+	"warn":    zapcore.WarnLevel,
+	"warning": zapcore.WarnLevel,
+	"error":   zapcore.ErrorLevel,
+	"panic":   zapcore.PanicLevel,
+}
+
+func parseLogLevel(value string) (zapcore.LevelEnabler, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil, nil
+	}
+	if lvl, ok := logLevelStrings[strings.ToLower(trimmed)]; ok {
+		level := zap.NewAtomicLevelAt(lvl)
+		return &level, nil
+	}
+	if n, err := strconv.Atoi(trimmed); err == nil {
+		if n <= 0 {
+			return nil, fmt.Errorf("invalid log level %q", value)
+		}
+		level := zap.NewAtomicLevelAt(zapcore.Level(int8(-1 * n)))
+		return &level, nil
+	}
+	return nil, fmt.Errorf("invalid log level %q", value)
 }
 
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
 func loadRuntimeConfig(ctx context.Context, dryRunFlag, offlineFlag bool) (runtimeConfig, error) {
-	includeEnv := os.Getenv("INCLUDE_NAMESPACES")
-	if includeEnv == "" {
-		includeEnv = "*"
-	}
-	rawNS := strings.Split(includeEnv, ",")
-	allowedNS := make([]string, 0, len(rawNS))
-	for _, ns := range rawNS {
-		if trimmed := strings.TrimSpace(ns); trimmed != "" {
-			allowedNS = append(allowedNS, trimmed)
-		}
-	}
-	if len(allowedNS) == 0 {
-		allowedNS = []string{"*"}
-	}
-
 	cfgPath := os.Getenv("CONFIG_PATH")
 	if cfgPath == "" {
 		cfgPath = config.FilePath
@@ -45,6 +65,24 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, offlineFlag bool) (runti
 	fileCfg, ok, err := config.Load(cfgPath)
 	if err != nil {
 		return runtimeConfig{}, fmt.Errorf("load config file: %w", err)
+	}
+
+	parseNamespaces := func(values []string) []string {
+		out := make([]string, 0, len(values))
+		for _, ns := range values {
+			if trimmed := strings.TrimSpace(ns); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+		return out
+	}
+
+	allowedNS := parseNamespaces(strings.Split(os.Getenv("INCLUDE_NAMESPACES"), ","))
+	if len(allowedNS) == 0 {
+		allowedNS = parseNamespaces(fileCfg.IncludeNamespaces)
+	}
+	if len(allowedNS) == 0 {
+		allowedNS = []string{"*"}
 	}
 
 	targetKind := os.Getenv("TARGET_KIND")
@@ -144,11 +182,62 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, offlineFlag bool) (runti
 		offline = offlineFlag || fileCfg.Offline
 	}
 
+	debug := fileCfg.Debug
+	if debugEnv := os.Getenv("DEBUG"); debugEnv != "" {
+		parsed, err := strconv.ParseBool(strings.TrimSpace(debugEnv))
+		if err != nil {
+			return runtimeConfig{}, fmt.Errorf("parse DEBUG: %w", err)
+		}
+		debug = parsed
+	}
+
+	intervalEnv := os.Getenv("PUSH_INTERVAL")
+	if intervalEnv == "" {
+		intervalEnv = os.Getenv("PUSH_INTERVALL")
+	}
+	var pushInterval time.Duration
+	if intervalEnv != "" {
+		val := strings.TrimSpace(intervalEnv)
+		dur, err := time.ParseDuration(val)
+		if err != nil {
+			return runtimeConfig{}, fmt.Errorf("parse PUSH_INTERVAL: %w", err)
+		}
+		if dur < 0 {
+			return runtimeConfig{}, fmt.Errorf("PUSH_INTERVAL must be >= 0, got %s", val)
+		}
+		pushInterval = dur
+	} else if ok && fileCfg.PushInterval > 0 {
+		pushInterval = fileCfg.PushInterval
+	}
+
+	var logLevel zapcore.LevelEnabler
+	if lvlEnv := os.Getenv("LOG_LEVEL"); lvlEnv != "" {
+		lvl, err := parseLogLevel(lvlEnv)
+		if err != nil {
+			return runtimeConfig{}, fmt.Errorf("parse LOG_LEVEL: %w", err)
+		}
+		logLevel = lvl
+	} else if ok {
+		lvl, err := parseLogLevel(fileCfg.LogLevel)
+		if err != nil {
+			return runtimeConfig{}, fmt.Errorf("parse config logLevel: %w", err)
+		}
+		logLevel = lvl
+	}
+
+	if logLevel == nil && debug {
+		level := zap.NewAtomicLevelAt(zapcore.DebugLevel)
+		logLevel = &level
+	}
+
 	return runtimeConfig{
-		AllowedNS: allowedNS,
-		Target:    t,
-		DryRun:    dryRun,
-		Offline:   offline,
-		PathMap:   fileCfg.PathMap,
+		AllowedNS:    allowedNS,
+		Target:       t,
+		DryRun:       dryRun,
+		Offline:      offline,
+		Debug:        debug,
+		PathMap:      fileCfg.PathMap,
+		PushInterval: pushInterval,
+		LogLevel:     logLevel,
 	}, nil
 }
