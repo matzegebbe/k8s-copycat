@@ -114,6 +114,14 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return fmt.Errorf("pull %s: %w", src, err)
 	}
 
+	srcDigest, err := img.Digest()
+	if err != nil {
+		p.mu.Lock()
+		delete(p.pushed, target)
+		p.mu.Unlock()
+		return fmt.Errorf("digest %s: %w", src, err)
+	}
+
 	username, password, err := p.target.BasicAuth(ctx)
 	if err != nil {
 		p.mu.Lock()
@@ -124,12 +132,17 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 
 	auth := &authn.Basic{Username: username, Password: password}
 
-	// Skip if image already exists in target registry
-	if _, err := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err == nil {
-		if p.dryRun {
-			fmt.Printf("[DRY RUN] Image %s already present at %s\n", src, target)
+	// Skip if image already exists in target registry with the same digest.
+	if desc, err := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err == nil {
+		if desc.Digest == srcDigest {
+			if p.dryRun {
+				fmt.Printf("[DRY RUN] Image %s already present at %s (digest %s)\n", src, target, srcDigest.String())
+			} else {
+				fmt.Printf("Image %s already present at %s (digest %s)\n", src, target, srcDigest.String())
+			}
+			return nil
 		}
-		return nil
+		fmt.Printf("Image %s already present at %s with different digest (%s != %s), updating...\n", src, target, desc.Digest.String(), srcDigest.String())
 	} else if te, ok := err.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
 		// continue to push
 	} else if err != nil {
