@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -16,6 +18,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
+	"go.uber.org/zap/zapcore"
 
 	"github.com/matzegebbe/k8s-copycat/internal/controllers"
 	"github.com/matzegebbe/k8s-copycat/internal/mirror"
@@ -43,14 +47,29 @@ func main() {
 	var offlineFlag bool
 	flag.BoolVar(&dryRunFlag, "dry-run", false, "simulate image push without actually pushing")
 	flag.BoolVar(&offlineFlag, "offline", false, "simulate image push without contacting target registry")
+
+	fileCfg, cfgFound, err := loadConfigFile()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "resolve configuration failed: %v\n", err)
+		os.Exit(1)
+	}
+
 	opts := zap.Options{Development: false}
+	if levelStr := strings.TrimSpace(fileCfg.LogLevel); levelStr != "" {
+		lvl, parseErr := zapcore.ParseLevel(strings.ToLower(levelStr))
+		if parseErr != nil {
+			fmt.Fprintf(os.Stderr, "resolve configuration failed: invalid log level %q: %v\n", fileCfg.LogLevel, parseErr)
+			os.Exit(1)
+		}
+		opts.Level = lvl
+	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
 	logger := zap.New(zap.UseFlagOptions(&opts))
 	ctrl.SetLogger(logger)
 	ctx := context.Background()
-	cfg, err := loadRuntimeConfig(ctx, dryRunFlag, offlineFlag)
+	cfg, err := loadRuntimeConfig(ctx, dryRunFlag, offlineFlag, fileCfg, cfgFound)
 	if err != nil {
 		logger.Error(err, "resolve configuration failed")
 		os.Exit(1)

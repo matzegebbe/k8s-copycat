@@ -28,6 +28,7 @@ type Docker struct {
 
 type Config struct {
 	TargetKind string             `yaml:"targetKind"` // ecr | docker
+	LogLevel   string             `yaml:"logLevel"`
 	ECR        ECR                `yaml:"ecr"`
 	Docker     Docker             `yaml:"docker"`
 	DryRun     bool               `yaml:"dryRun"`

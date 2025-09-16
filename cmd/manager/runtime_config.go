@@ -12,6 +12,18 @@ import (
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
 
+func loadConfigFile() (config.Config, bool, error) {
+	cfgPath := os.Getenv("CONFIG_PATH")
+	if cfgPath == "" {
+		cfgPath = config.FilePath
+	}
+	cfg, ok, err := config.Load(cfgPath)
+	if err != nil {
+		return config.Config{}, false, fmt.Errorf("load config file: %w", err)
+	}
+	return cfg, ok, nil
+}
+
 // runtimeConfig holds all runtime configuration derived from flags, env vars and the config file.
 type runtimeConfig struct {
 	AllowedNS []string
@@ -22,7 +34,7 @@ type runtimeConfig struct {
 }
 
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
-func loadRuntimeConfig(ctx context.Context, dryRunFlag, offlineFlag bool) (runtimeConfig, error) {
+func loadRuntimeConfig(ctx context.Context, dryRunFlag, offlineFlag bool, fileCfg config.Config, cfgFound bool) (runtimeConfig, error) {
 	includeEnv := os.Getenv("INCLUDE_NAMESPACES")
 	if includeEnv == "" {
 		includeEnv = "*"
@@ -38,24 +50,18 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, offlineFlag bool) (runti
 		allowedNS = []string{"*"}
 	}
 
-	cfgPath := os.Getenv("CONFIG_PATH")
-	if cfgPath == "" {
-		cfgPath = config.FilePath
-	}
-	fileCfg, ok, err := config.Load(cfgPath)
-	if err != nil {
-		return runtimeConfig{}, fmt.Errorf("load config file: %w", err)
-	}
-
 	targetKind := os.Getenv("TARGET_KIND")
-	if targetKind == "" && ok {
+	if targetKind == "" && cfgFound {
 		targetKind = strings.ToLower(strings.TrimSpace(fileCfg.TargetKind))
 	}
 	if targetKind == "" {
 		targetKind = "ecr"
 	}
 
-	var t registry.Target
+	var (
+		t   registry.Target
+		err error
+	)
 	switch targetKind {
 	case "ecr":
 		eAccount := fileCfg.ECR.AccountID
