@@ -66,7 +66,7 @@ type DeploymentReconciler struct{ baseReconciler }
 
 func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-	log.Info("saw Deployment", "name", req.Name, "namespace", req.Namespace)
+	log.V(1).Info("saw Deployment", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
@@ -88,7 +88,7 @@ type StatefulSetReconciler struct{ baseReconciler }
 
 func (r *StatefulSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-	log.Info("saw StatefulSet", "name", req.Name, "namespace", req.Namespace)
+	log.V(1).Info("saw StatefulSet", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
@@ -110,7 +110,7 @@ type JobReconciler struct{ baseReconciler }
 
 func (r *JobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-	log.Info("saw Job", "name", req.Name, "namespace", req.Namespace)
+	log.V(1).Info("saw Job", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
@@ -132,7 +132,7 @@ type CronJobReconciler struct{ baseReconciler }
 
 func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-	log.Info("saw CronJob", "name", req.Name, "namespace", req.Namespace)
+	log.V(1).Info("saw CronJob", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
@@ -154,7 +154,7 @@ type PodReconciler struct{ baseReconciler }
 
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-	log.Info("saw Pod", "name", req.Name, "namespace", req.Namespace)
+	log.V(1).Info("saw Pod", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
