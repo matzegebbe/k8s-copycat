@@ -63,20 +63,20 @@ spec:
             - name: k8s-copycat-config
               mountPath: /config
               readOnly: true
-          image: ghcr.io/matzegebbe/k8s-copycat:1
+          image: ghcr.io/matzegebbe/k8s-copycat:main
           imagePullPolicy: IfNotPresent
           env:
             # choose one of: ecr | docker
-            - name: TARGET_KIND
-              value: "docker"
-            - name: TARGET_REPO_PREFIX
-              value: "backup"
-            - name: TARGET_REGISTRY
-              value: "registry.test.svc.cluster.local:5000"
-            - name: TARGET_INSECURE
-              value: "true"
-            - name: DRY_RUN
-              value: "true"
+            #- name: TARGET_KIND
+            #  value: "docker"
+            #- name: TARGET_REPO_PREFIX
+            #  value: "backup"
+            #- name: TARGET_REGISTRY
+            #  value: "registry.test.svc.cluster.local:5000"
+            #- name: TARGET_INSECURE
+            #  value: "true"
+            #- name: DRY_RUN
+            #  value: "true"
             #- name: ECR_REPO_PREFIX
             #  value: "mirrors"
             #- name: ECR_CREATE_REPO
@@ -102,7 +102,6 @@ spec:
             items:
               - key: config.yaml
                 path: config.yaml
-# --- For Docker registry instead of ECR, set:
 #         - name: TARGET_KIND
 #           value: "docker"
 #         - name: TARGET_REGISTRY
@@ -115,7 +114,6 @@ spec:
 #           valueFrom: { secretKeyRef: { name: registry-creds, key: username } }
 #         - name: TARGET_PASSWORD
 #           valueFrom: { secretKeyRef: { name: registry-creds, key: password } }
-
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -124,14 +122,16 @@ metadata:
   namespace: k8s-copycat
 data:
   config.yaml: |
-    targetKind: ecr        # ecr | docker
-    logLevel: info         # debug | info | warn | error | dpanic | panic | fatal
-    ecr:
-      accountID: "123456789012"
-      region: "eu-central-1"
-      repoPrefix: "mirrors"
-      createRepo: true
+    targetKind: docker     # ecr | docker
+    logLevel: debug         # debug | info | warn | error | dpanic | panic | fatal
+    dryRun: false
+    includeNamespaces: ["test"]
+    #ecr:
+    #  accountID: "123456789012"
+    #  region: "eu-central-1"
+    #  repoPrefix: "mirrors"
+    #  createRepo: true
     docker:
-      registry: "ghcr.io"
+      registry: "registry.test.svc.cluster.local:5000"
       repoPrefix: "mirrors"
-      insecure: false
+      insecure: true

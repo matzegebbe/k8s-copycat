@@ -44,9 +44,7 @@ func main() {
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "health probe bind address")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", true, "enable leader election")
 	var dryRunFlag bool
-	var offlineFlag bool
 	flag.BoolVar(&dryRunFlag, "dry-run", false, "simulate image push without actually pushing")
-	flag.BoolVar(&offlineFlag, "offline", false, "simulate image push without contacting target registry")
 
 	fileCfg, cfgFound, err := loadConfigFile()
 	if err != nil {
@@ -69,9 +67,9 @@ func main() {
 	logger := zap.New(zap.UseFlagOptions(&opts))
 	ctrl.SetLogger(logger)
 	ctx := context.Background()
-	cfg, err := loadRuntimeConfig(ctx, dryRunFlag, offlineFlag, fileCfg, cfgFound)
+	cfg, err := loadRuntimeConfig(ctx, dryRunFlag, fileCfg, cfgFound)
 	if err != nil {
-		logger.Error(err, "resolve configuration failed")
+		logger.Error(err, "resolve configuration failed 🙀")
 		os.Exit(1)
 	}
 
@@ -91,27 +89,27 @@ func main() {
 	}
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
 	if err != nil {
-		logger.Error(err, "unable to start manager")
+		logger.Error(err, "unable to start copycat 🙀")
 		os.Exit(1)
 	}
 
 	transformer := util.NewRepoPathTransformer(cfg.PathMap)
 	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, cfg.Offline, transformer)
 	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS); err != nil {
-		logger.Error(err, "setup controllers failed")
+		logger.Error(err, "setup controllers failed 🙀")
 		os.Exit(1)
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
-		logger.Error(err, "healthz failed")
+		logger.Error(err, "healthz failed 🙀")
 		os.Exit(1)
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
-		logger.Error(err, "readyz failed")
+		logger.Error(err, "readyz failed 🙀")
 		os.Exit(1)
 	}
 
-	logger.Info("starting manager")
+	logger.Info("starting copycat 😼")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		logger.Error(err, "manager exited non-zero")
 		os.Exit(1)

@@ -34,7 +34,7 @@ type runtimeConfig struct {
 }
 
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
-func loadRuntimeConfig(ctx context.Context, dryRunFlag, offlineFlag bool, fileCfg config.Config, cfgFound bool) (runtimeConfig, error) {
+func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Config, cfgFound bool) (runtimeConfig, error) {
 	includeEnv := os.Getenv("INCLUDE_NAMESPACES")
 	if includeEnv == "" {
 		includeEnv = "*"
@@ -139,22 +139,10 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, offlineFlag bool, fileCf
 		dryRun = dryRunFlag || fileCfg.DryRun
 	}
 
-	offlineEnv := os.Getenv("OFFLINE")
-	offline := false
-	if offlineEnv != "" {
-		val := strings.ToLower(strings.TrimSpace(offlineEnv))
-		if val == "1" || val == "true" || val == "yes" {
-			offline = true
-		}
-	} else {
-		offline = offlineFlag || fileCfg.Offline
-	}
-
 	return runtimeConfig{
 		AllowedNS: allowedNS,
 		Target:    t,
 		DryRun:    dryRun,
-		Offline:   offline,
 		PathMap:   fileCfg.PathMap,
 	}, nil
 }
