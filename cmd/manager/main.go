@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"strings"
 
@@ -19,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
+	uberzap "go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/matzegebbe/k8s-copycat/internal/controllers"
@@ -48,21 +48,24 @@ func main() {
 
 	fileCfg, cfgFound, err := loadConfigFile()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "resolve configuration failed: %v\n", err)
+		logStartupError(err, "resolve configuration failed")
 		os.Exit(1)
 	}
 
-	opts := zap.Options{Development: false}
+	var opts zap.Options
+	configureJSONLogging(&opts)
 	if levelStr := strings.TrimSpace(fileCfg.LogLevel); levelStr != "" {
 		lvl, parseErr := zapcore.ParseLevel(strings.ToLower(levelStr))
 		if parseErr != nil {
-			fmt.Fprintf(os.Stderr, "resolve configuration failed: invalid log level %q: %v\n", fileCfg.LogLevel, parseErr)
+			logStartupError(parseErr, "resolve configuration failed", "invalidLogLevel", fileCfg.LogLevel)
 			os.Exit(1)
 		}
 		opts.Level = lvl
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	configureJSONLogging(&opts)
 
 	logger := zap.New(zap.UseFlagOptions(&opts))
 	ctrl.SetLogger(logger)
@@ -94,7 +97,7 @@ func main() {
 	}
 
 	transformer := util.NewRepoPathTransformer(cfg.PathMap)
-	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, cfg.Offline, transformer)
+	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, cfg.Offline, transformer, logger.WithName("mirror"))
 	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS); err != nil {
 		logger.Error(err, "setup controllers failed 🙀")
 		os.Exit(1)
@@ -114,4 +117,21 @@ func main() {
 		logger.Error(err, "manager exited non-zero")
 		os.Exit(1)
 	}
+}
+
+func configureJSONLogging(opts *zap.Options) {
+	opts.Development = false
+	opts.DestWriter = os.Stdout
+
+	encoderConfig := uberzap.NewProductionEncoderConfig()
+	encoderConfig.EncodeTime = zapcore.RFC3339NanoTimeEncoder
+
+	opts.Encoder = zapcore.NewJSONEncoder(encoderConfig)
+	opts.TimeEncoder = zapcore.RFC3339NanoTimeEncoder
+}
+
+func logStartupError(err error, msg string, keysAndValues ...any) {
+	var opts zap.Options
+	configureJSONLogging(&opts)
+	zap.New(zap.UseFlagOptions(&opts)).Error(err, msg, keysAndValues...)
 }
