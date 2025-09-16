@@ -65,17 +65,18 @@ func (r *baseReconciler) processPodSpec(ctx context.Context, ns string, spec *co
 type DeploymentReconciler struct{ baseReconciler }
 
 func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("saw Deployment", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
+	log := ctrl.LoggerFrom(ctx)
+	log.V(1).Info("saw Deployment", "name", req.Name, "namespace", req.Namespace)
 	var d appsv1.Deployment
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &d); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	return r.processPodSpec(ctx, d.Namespace, &d.Spec.Template.Spec)
 }
+
 func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&appsv1.Deployment{}).
@@ -87,11 +88,11 @@ func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 type StatefulSetReconciler struct{ baseReconciler }
 
 func (r *StatefulSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("saw StatefulSet", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
+	log := ctrl.LoggerFrom(ctx)
+	log.V(1).Info("saw StatefulSet", "name", req.Name, "namespace", req.Namespace)
 	var s appsv1.StatefulSet
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &s); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -109,11 +110,11 @@ func (r *StatefulSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 type JobReconciler struct{ baseReconciler }
 
 func (r *JobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("saw Job", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
+	log := ctrl.LoggerFrom(ctx)
+	log.V(1).Info("saw Job", "name", req.Name, "namespace", req.Namespace)
 	var j batchv1.Job
 	if err := r.Get(ctx, req.NamespacedName, &j); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -131,11 +132,11 @@ func (r *JobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 type CronJobReconciler struct{ baseReconciler }
 
 func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("saw CronJob", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
+	log := ctrl.LoggerFrom(ctx)
+	log.V(1).Info("saw CronJob", "name", req.Name, "namespace", req.Namespace)
 	var cj batchv1.CronJob
 	if err := r.Get(ctx, req.NamespacedName, &cj); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -153,11 +154,11 @@ func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 type PodReconciler struct{ baseReconciler }
 
 func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("saw Pod", "name", req.Name, "namespace", req.Namespace)
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
+	log := ctrl.LoggerFrom(ctx)
+	log.V(1).Info("saw Pod", "name", req.Name, "namespace", req.Namespace)
 	var p corev1.Pod
 	if err := r.Get(ctx, req.NamespacedName, &p); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -175,7 +176,6 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// SetupAll wires all controllers.
 func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string) error {
 	if err := (&DeploymentReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
 		return err
