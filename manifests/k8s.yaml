@@ -125,6 +125,7 @@ metadata:
 data:
   config.yaml: |
     targetKind: ecr        # ecr | docker
+    logLevel: info         # debug | info | warn | error | dpanic | panic | fatal
     ecr:
       accountID: "123456789012"
       region: "eu-central-1"
