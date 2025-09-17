@@ -27,16 +27,17 @@ type Pusher interface {
 }
 
 type pusher struct {
-	target    registry.Target
-	dryRun    bool
-	offline   bool
-	transform func(string) string
-	mu        sync.Mutex
-	pushed    map[string]struct{}
-	logger    logr.Logger
+	target         registry.Target
+	dryRun         bool
+	transform      func(string) string
+	mu             sync.Mutex
+	pushed         map[string]struct{}
+	logger         logr.Logger
+	keychain       authn.Keychain
+	requestTimeout time.Duration
 }
 
-func NewPusher(t registry.Target, dryRun, offline bool, transform func(string) string, logger logr.Logger) Pusher {
+func NewPusher(t registry.Target, dryRun bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration) Pusher {
 	if transform == nil {
 		transform = util.CleanRepoName
 	}
@@ -45,13 +46,20 @@ func NewPusher(t registry.Target, dryRun, offline bool, transform func(string) s
 	} else {
 		logger = logger.WithName("pusher")
 	}
+	if keychain == nil {
+		keychain = NewStaticKeychain(nil)
+	}
+	if requestTimeout < 0 {
+		requestTimeout = 0
+	}
 	return &pusher{
-		target:    t,
-		dryRun:    dryRun,
-		offline:   offline,
-		transform: transform,
-		pushed:    make(map[string]struct{}),
-		logger:    logger,
+		target:         t,
+		dryRun:         dryRun,
+		transform:      transform,
+		pushed:         make(map[string]struct{}),
+		logger:         logger,
+		keychain:       keychain,
+		requestTimeout: requestTimeout,
 	}
 }
 
@@ -126,18 +134,20 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 	p.pushed[target] = struct{}{}
 	p.mu.Unlock()
 
-	if p.offline {
-		log.Info("offline mode: skipping push", "result", "skipped", "offline", true)
-		return nil
-	}
+	log.V(1).Info("starting pull from source")
 
-	img, err := remote.Image(srcRef, remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure())))
+	pullCtx, cancelPull := p.operationContext(ctx)
+	defer cancelPull()
+
+	img, err := remote.Image(srcRef, remote.WithContext(pullCtx), remote.WithAuthFromKeychain(p.keychain), remote.WithTransport(transport(p.target.Insecure())))
 	if err != nil {
 		p.mu.Lock()
 		delete(p.pushed, target)
 		p.mu.Unlock()
 		return fmt.Errorf("pull %s: %w", src, err)
 	}
+
+	log.V(1).Info("finished pulling image from source")
 
 	srcDigest, err := img.Digest()
 	if err != nil {
@@ -147,6 +157,8 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return fmt.Errorf("digest %s: %w", src, err)
 	}
 
+	log.V(1).Info("resolving target registry credentials")
+
 	username, password, err := p.target.BasicAuth(ctx)
 	if err != nil {
 		p.mu.Lock()
@@ -155,10 +167,19 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return fmt.Errorf("auth: %w", err)
 	}
 
+	if username != "" || password != "" {
+		log.V(1).Info("using provided target registry credentials")
+	} else {
+		log.V(1).Info("no target registry credentials provided, using anonymous access")
+	}
+
 	auth := &authn.Basic{Username: username, Password: password}
 
 	// Skip if image already exists in target registry with the same digest.
-	if desc, err := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err == nil {
+	headCtx, cancelHead := p.operationContext(ctx)
+	desc, headErr := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
+	cancelHead()
+	if headErr == nil {
 		if desc.Digest == srcDigest {
 			if p.dryRun {
 				log.Info("image already present at target", "digest", srcDigest.String(), "dryRun", true, "result", "skipped")
@@ -168,13 +189,13 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 			return nil
 		}
 		log.Info("image already present with different digest, updating", "currentDigest", desc.Digest.String(), "sourceDigest", srcDigest.String())
-	} else if te, ok := err.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
+	} else if te, ok := headErr.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
 		// continue to push
-	} else if err != nil {
+	} else if headErr != nil {
 		p.mu.Lock()
 		delete(p.pushed, target)
 		p.mu.Unlock()
-		return fmt.Errorf("check %s: %w", target, err)
+		return fmt.Errorf("check %s: %w", target, headErr)
 	}
 
 	if err := p.target.EnsureRepository(ctx, repo); err != nil {
@@ -189,7 +210,10 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 		return nil
 	}
 	log.Info("pushing image to target")
-	if err := remote.Write(targetRef, img, remote.WithAuth(auth), remote.WithContext(ctx), remote.WithTransport(transport(p.target.Insecure()))); err != nil {
+	pushCtx, cancelPush := p.operationContext(ctx)
+	err = remote.Write(targetRef, img, remote.WithAuth(auth), remote.WithContext(pushCtx), remote.WithTransport(transport(p.target.Insecure())))
+	cancelPush()
+	if err != nil {
 		p.mu.Lock()
 		delete(p.pushed, target)
 		p.mu.Unlock()
@@ -201,4 +225,11 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 
 func (p *pusher) DryRun() bool {
 	return p.dryRun
+}
+
+func (p *pusher) operationContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	if p.requestTimeout <= 0 {
+		return ctx, func() {}
+	}
+	return context.WithTimeout(ctx, p.requestTimeout)
 }

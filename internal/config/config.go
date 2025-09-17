@@ -26,14 +26,29 @@ type Docker struct {
 	// Username/Password should come from Secret envs, not ConfigMap.
 }
 
+// RegistryCredential defines credentials for pulling from a registry. Username and
+// password can either be set directly or provided via environment variables using
+// the *_env fields. When both direct values and env-based overrides are provided,
+// the environment variables take precedence at runtime.
+type RegistryCredential struct {
+	Registry    string `yaml:"registry"`
+	Username    string `yaml:"username"`
+	Password    string `yaml:"password"`
+	UsernameEnv string `yaml:"usernameEnv"`
+	PasswordEnv string `yaml:"passwordEnv"`
+	Token       string `yaml:"token"`
+	TokenEnv    string `yaml:"tokenEnv"`
+}
+
 type Config struct {
-	TargetKind string             `yaml:"targetKind"` // ecr | docker
-	LogLevel   string             `yaml:"logLevel"`
-	ECR        ECR                `yaml:"ecr"`
-	Docker     Docker             `yaml:"docker"`
-	DryRun     bool               `yaml:"dryRun"`
-	Offline    bool               `yaml:"offline"`
-	PathMap    []util.PathMapping `yaml:"pathMap"`
+	TargetKind          string               `yaml:"targetKind"` // ecr | docker
+	LogLevel            string               `yaml:"logLevel"`
+	ECR                 ECR                  `yaml:"ecr"`
+	Docker              Docker               `yaml:"docker"`
+	DryRun              bool                 `yaml:"dryRun"`
+	RequestTimeout      string               `yaml:"requestTimeout"`
+	RegistryCredentials []RegistryCredential `yaml:"registryCredentials"`
+	PathMap             []util.PathMapping   `yaml:"pathMap"`
 }
 
 func Load(path string) (Config, bool, error) {

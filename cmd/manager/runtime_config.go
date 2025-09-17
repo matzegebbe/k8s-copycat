@@ -6,8 +6,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/google/go-containerregistry/pkg/authn"
 
 	"github.com/matzegebbe/k8s-copycat/internal/config"
+	"github.com/matzegebbe/k8s-copycat/internal/mirror"
 	"github.com/matzegebbe/k8s-copycat/internal/registry"
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
@@ -26,12 +30,15 @@ func loadConfigFile() (config.Config, bool, error) {
 
 // runtimeConfig holds all runtime configuration derived from flags, env vars and the config file.
 type runtimeConfig struct {
-	AllowedNS []string
-	Target    registry.Target
-	DryRun    bool
-	Offline   bool
-	PathMap   []util.PathMapping
+	AllowedNS      []string
+	Target         registry.Target
+	DryRun         bool
+	PathMap        []util.PathMapping
+	RequestTimeout time.Duration
+	Keychain       authn.Keychain
 }
+
+const defaultRequestTimeout = 2 * time.Minute
 
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
 func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Config, cfgFound bool) (runtimeConfig, error) {
@@ -139,10 +146,66 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		dryRun = dryRunFlag || fileCfg.DryRun
 	}
 
+	timeoutVal := strings.TrimSpace(os.Getenv("REGISTRY_REQUEST_TIMEOUT"))
+	if timeoutVal == "" {
+		timeoutVal = strings.TrimSpace(fileCfg.RequestTimeout)
+	}
+	timeout := defaultRequestTimeout
+	if timeoutVal != "" {
+		parsed, parseErr := time.ParseDuration(timeoutVal)
+		if parseErr != nil {
+			return runtimeConfig{}, fmt.Errorf("parse registry request timeout: %w", parseErr)
+		}
+		timeout = parsed
+	}
+
+	keychain := buildKeychainFromConfig(fileCfg.RegistryCredentials)
+
 	return runtimeConfig{
-		AllowedNS: allowedNS,
-		Target:    t,
-		DryRun:    dryRun,
-		PathMap:   fileCfg.PathMap,
+		AllowedNS:      allowedNS,
+		Target:         t,
+		DryRun:         dryRun,
+		PathMap:        fileCfg.PathMap,
+		RequestTimeout: timeout,
+		Keychain:       keychain,
 	}, nil
+}
+
+func buildKeychainFromConfig(creds []config.RegistryCredential) authn.Keychain {
+	if len(creds) == 0 {
+		return mirror.NewStaticKeychain(nil)
+	}
+	auths := make(map[string]authn.Authenticator, len(creds))
+	for _, c := range creds {
+		registry := strings.TrimSpace(c.Registry)
+		if registry == "" {
+			continue
+		}
+		username := strings.TrimSpace(c.Username)
+		if env := strings.TrimSpace(c.UsernameEnv); env != "" {
+			if val := os.Getenv(env); val != "" {
+				username = val
+			}
+		}
+		password := c.Password
+		if env := strings.TrimSpace(c.PasswordEnv); env != "" {
+			if val := os.Getenv(env); val != "" {
+				password = val
+			}
+		}
+		token := strings.TrimSpace(c.Token)
+		if env := strings.TrimSpace(c.TokenEnv); env != "" {
+			if val := os.Getenv(env); val != "" {
+				token = val
+			}
+		}
+
+		switch {
+		case token != "":
+			auths[registry] = authn.FromConfig(authn.AuthConfig{RegistryToken: token})
+		case username != "" || password != "":
+			auths[registry] = &authn.Basic{Username: username, Password: password}
+		}
+	}
+	return mirror.NewStaticKeychain(auths)
 }
