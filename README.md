@@ -38,6 +38,7 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO` (for ECR)
 - `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD`, `TARGET_INSECURE` (for Docker)
 - `INCLUDE_NAMESPACES`: `*` or comma-separated list (e.g., `default,prod`)
+- `REGISTRY_REQUEST_TIMEOUT`: override the timeout for individual pull/push operations (default `2m`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
 
 ### Example `config.yaml` Snippet
@@ -53,6 +54,27 @@ pathMap:
 
 Rules are evaluated in order, with the first matching entry applied. Leaving
 `pathMap` empty keeps repository paths unchanged.
+
+### Configuring registry credentials
+
+You can provide additional credentials used when pulling source images. This is
+useful for authenticating against Docker Hub or other registries even when
+mirroring into a different target such as ECR.
+
+```yaml
+requestTimeout: 2m
+registryCredentials:
+  - registry: registry-1.docker.io
+    usernameEnv: DOCKERHUB_USERNAME
+    passwordEnv: DOCKERHUB_PASSWORD
+  - registry: ghcr.io
+    tokenEnv: GHCR_TOKEN
+```
+
+Credentials can be supplied directly in the configuration file via `username`,
+`password`, or `token`, but using environment variables (referenced through
+`*Env` fields) is recommended for secrets. When a token is provided it is sent as
+an authentication bearer token; otherwise basic authentication is used.
 
 ## Build Container
 

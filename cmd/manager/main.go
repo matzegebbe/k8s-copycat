@@ -97,7 +97,7 @@ func main() {
 	}
 
 	transformer := util.NewRepoPathTransformer(cfg.PathMap)
-	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, cfg.Offline, transformer, logger.WithName("mirror"))
+	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, transformer, logger.WithName("mirror"), cfg.Keychain, cfg.RequestTimeout)
 	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS); err != nil {
 		logger.Error(err, "setup controllers failed 🙀")
 		os.Exit(1)

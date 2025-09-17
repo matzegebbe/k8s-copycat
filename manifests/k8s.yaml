@@ -81,6 +81,14 @@ spec:
             #  value: "mirrors"
             #- name: ECR_CREATE_REPO
             #  value: "true"
+            #- name: REGISTRY_REQUEST_TIMEOUT
+            #  value: "2m"
+            #- name: DOCKERHUB_USERNAME
+            #  valueFrom: { secretKeyRef: { name: registry-creds, key: dockerhub-username } }
+            #- name: DOCKERHUB_PASSWORD
+            #  valueFrom: { secretKeyRef: { name: registry-creds, key: dockerhub-password } }
+            #- name: GHCR_TOKEN
+            #  valueFrom: { secretKeyRef: { name: registry-creds, key: ghcr-token } }
             # include namespaces: "*" or "default,prod"
             #- name: CONFIG_PATH
             #  value: "/config/config.yaml"
@@ -126,6 +134,7 @@ data:
     logLevel: debug         # debug | info | warn | error | dpanic | panic | fatal
     dryRun: false
     includeNamespaces: ["test"]
+    requestTimeout: 2m
     #ecr:
     #  accountID: "123456789012"
     #  region: "eu-central-1"
@@ -135,3 +144,9 @@ data:
       registry: "registry.test.svc.cluster.local:5000"
       repoPrefix: "mirrors"
       insecure: true
+    registryCredentials:
+      - registry: registry-1.docker.io
+        usernameEnv: DOCKERHUB_USERNAME
+        passwordEnv: DOCKERHUB_PASSWORD
+      - registry: ghcr.io
+        tokenEnv: GHCR_TOKEN
