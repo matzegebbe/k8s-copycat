@@ -4,9 +4,8 @@ updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "friday"
-      time: "18:00"
+      interval: "daily"
+      time: "07:00"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 5
     labels: ["deps", "ci"]
@@ -14,9 +13,8 @@ updates:
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "friday"
-      time: "18:05"
+      interval: "daily"
+      time: "07:05"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 10
     labels: ["deps", "go"]
@@ -36,9 +34,8 @@ updates:
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "friday"
-      time: "18:15"
+      interval: "daily"
+      time: "07:10"
       timezone: "Europe/Berlin"
     labels: ["deps", "docker"]
     commit-message:
