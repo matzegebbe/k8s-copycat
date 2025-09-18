@@ -13,10 +13,11 @@ import (
 const FilePath = "/config/config.yaml"
 
 type ECR struct {
-	AccountID  string `yaml:"accountID"`
-	Region     string `yaml:"region"`
-	RepoPrefix string `yaml:"repoPrefix"`
-	CreateRepo *bool  `yaml:"createRepo"`
+        AccountID  string `yaml:"accountID"`
+        Region     string `yaml:"region"`
+        RepoPrefix string `yaml:"repoPrefix"`
+        CreateRepo *bool  `yaml:"createRepo"`
+        LifecyclePolicy string `yaml:"lifecyclePolicy"`
 }
 
 type Docker struct {

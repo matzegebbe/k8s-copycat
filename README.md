@@ -41,6 +41,30 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `REGISTRY_REQUEST_TIMEOUT`: override the timeout for individual pull/push operations (default `2m`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
 
+### Applying an ECR lifecycle policy
+
+You can provide an [ECR lifecycle policy](https://docs.aws.amazon.com/AmazonECR/latest/userguide/lifecycle_policy_examples.html)
+in the config file. When a repository is created by k8s-copycat, the policy is applied automatically.
+
+```yaml
+ecr:
+  lifecyclePolicy: |
+    {
+      "rules": [
+        {
+          "rulePriority": 1,
+          "description": "Retain only the five most recent images",
+          "selection": {
+            "tagStatus": "any",
+            "countType": "imageCountMoreThan",
+            "countNumber": 5
+          },
+          "action": { "type": "expire" }
+        }
+      ]
+    }
+```
+
 ### Example `config.yaml` Snippet
 
 ```yaml

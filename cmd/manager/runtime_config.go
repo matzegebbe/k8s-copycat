@@ -79,10 +79,11 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		}
 
 		cfg := registry.ECRConfig{
-			AccountID:  eAccount,
-			Region:     eRegion,
-			RepoPrefix: ePrefix,
-			CreateRepo: eCreate,
+			AccountID:       eAccount,
+			Region:          eRegion,
+			RepoPrefix:      ePrefix,
+			CreateRepo:      eCreate,
+			LifecyclePolicy: fileCfg.ECR.LifecyclePolicy,
 		}
 		if cfg.AccountID == "" || cfg.Region == "" {
 			return runtimeConfig{}, fmt.Errorf("for TARGET_KIND=ecr set ECR_ACCOUNT_ID and AWS_REGION (via ConfigMap or env)")

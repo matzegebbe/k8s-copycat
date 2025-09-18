@@ -19,6 +19,8 @@ type ECRConfig struct {
 	Region     string
 	RepoPrefix string
 	CreateRepo bool
+	// LifecyclePolicy contains optional policy JSON applied when repositories are created.
+	LifecyclePolicy string
 }
 
 type ecrClient struct {
@@ -65,6 +67,21 @@ func (c *ecrClient) EnsureRepository(ctx context.Context, name string) error {
 				return createErr
 			}
 			log.Info("repository created")
+			policy := strings.TrimSpace(c.cfg.LifecyclePolicy)
+			if policy != "" {
+				putInput := &ecr.PutLifecyclePolicyInput{
+					RepositoryName:      aws.String(name),
+					LifecyclePolicyText: aws.String(policy),
+				}
+				if c.cfg.AccountID != "" {
+					putInput.RegistryId = aws.String(c.cfg.AccountID)
+				}
+				if _, putErr := c.client.PutLifecyclePolicy(ctx, putInput); putErr != nil {
+					log.Error(putErr, "failed to apply lifecycle policy")
+					return putErr
+				}
+				log.Info("applied lifecycle policy")
+			}
 			return nil
 		}
 		log.Error(err, "failed to describe repository")
