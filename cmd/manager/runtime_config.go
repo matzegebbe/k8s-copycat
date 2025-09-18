@@ -42,20 +42,7 @@ const defaultRequestTimeout = 2 * time.Minute
 
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
 func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Config, cfgFound bool) (runtimeConfig, error) {
-	includeEnv := os.Getenv("INCLUDE_NAMESPACES")
-	if includeEnv == "" {
-		includeEnv = "*"
-	}
-	rawNS := strings.Split(includeEnv, ",")
-	allowedNS := make([]string, 0, len(rawNS))
-	for _, ns := range rawNS {
-		if trimmed := strings.TrimSpace(ns); trimmed != "" {
-			allowedNS = append(allowedNS, trimmed)
-		}
-	}
-	if len(allowedNS) == 0 {
-		allowedNS = []string{"*"}
-	}
+	allowedNS := resolveAllowedNamespaces(os.Getenv("INCLUDE_NAMESPACES"), fileCfg.IncludeNamespaces)
 
 	targetKind := os.Getenv("TARGET_KIND")
 	if targetKind == "" && cfgFound {
@@ -169,6 +156,28 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		RequestTimeout: timeout,
 		Keychain:       keychain,
 	}, nil
+}
+
+func resolveAllowedNamespaces(envVal string, configValues []string) []string {
+	if trimmed := strings.TrimSpace(envVal); trimmed != "" {
+		if ns := sanitizeNamespaces(strings.Split(trimmed, ",")); len(ns) > 0 {
+			return ns
+		}
+	}
+	if ns := sanitizeNamespaces(configValues); len(ns) > 0 {
+		return ns
+	}
+	return []string{"*"}
+}
+
+func sanitizeNamespaces(values []string) []string {
+	allowed := make([]string, 0, len(values))
+	for _, ns := range values {
+		if trimmed := strings.TrimSpace(ns); trimmed != "" {
+			allowed = append(allowed, trimmed)
+		}
+	}
+	return allowed
 }
 
 func buildKeychainFromConfig(creds []config.RegistryCredential) authn.Keychain {

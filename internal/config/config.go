@@ -45,6 +45,7 @@ type Config struct {
 	LogLevel            string               `yaml:"logLevel"`
 	ECR                 ECR                  `yaml:"ecr"`
 	Docker              Docker               `yaml:"docker"`
+	IncludeNamespaces   []string             `yaml:"includeNamespaces"`
 	DryRun              bool                 `yaml:"dryRun"`
 	RequestTimeout      string               `yaml:"requestTimeout"`
 	RegistryCredentials []RegistryCredential `yaml:"registryCredentials"`
