@@ -140,6 +140,21 @@ data:
     #  region: "eu-central-1"
     #  repoPrefix: "mirrors"
     #  createRepo: true
+    #  lifecyclePolicy: |
+    #    {
+    #      "rules": [
+    #        {
+    #          "rulePriority": 1,
+    #          "description": "Retain only the five most recent images",
+    #          "selection": {
+    #            "tagStatus": "any",
+    #            "countType": "imageCountMoreThan",
+    #            "countNumber": 5
+    #          },
+    #          "action": { "type": "expire" }
+    #        }
+    #      ]
+    #    }
     docker:
       registry: "registry.test.svc.cluster.local:5000"
       repoPrefix: "mirrors"
