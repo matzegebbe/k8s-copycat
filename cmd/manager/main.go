@@ -40,7 +40,7 @@ func main() {
 	var probeAddr string
 	var enableLeaderElection bool
 
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "metrics bind address")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "metrics bind addres")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "health probe bind address")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", true, "enable leader election")
 	var dryRunFlag bool
@@ -83,7 +83,7 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "k8s-copycat.k8s-copycat",
 	}
-	if !(len(cfg.AllowedNS) == 1 && cfg.AllowedNS[0] == "*") {
+	if len(cfg.AllowedNS) != 1 && cfg.AllowedNS[0] != "*" {
 		nsMap := make(map[string]cache.Config, len(cfg.AllowedNS))
 		for _, ns := range cfg.AllowedNS {
 			nsMap[ns] = cache.Config{}
