@@ -46,7 +46,7 @@ func (r *baseReconciler) nsAllowed(ns string) bool {
 	return false
 }
 
-func (r *baseReconciler) processPodSpec(ctx context.Context, ns string, spec *corev1.PodSpec) (ctrl.Result, error) {
+func (r *baseReconciler) processPodSpec(ctx context.Context, ns, podName string, spec *corev1.PodSpec) (ctrl.Result, error) {
 	if !r.nsAllowed(ns) {
 		return ctrl.Result{}, nil
 	}
@@ -55,7 +55,12 @@ func (r *baseReconciler) processPodSpec(ctx context.Context, ns string, spec *co
 		return ctrl.Result{}, nil
 	}
 	for _, img := range images {
-		if err := r.Pusher.Mirror(ctx, img); err != nil {
+		meta := mirror.Metadata{
+			Namespace:     ns,
+			PodName:       podName,
+			ContainerName: img.ContainerName,
+		}
+		if err := r.Pusher.Mirror(ctx, img.Image, meta); err != nil {
 			return ctrl.Result{RequeueAfter: retryDelay}, nil
 		}
 	}
@@ -74,7 +79,7 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &d); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	return r.processPodSpec(ctx, d.Namespace, &d.Spec.Template.Spec)
+	return r.processPodSpec(ctx, d.Namespace, d.Name, &d.Spec.Template.Spec)
 }
 
 func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -97,7 +102,7 @@ func (r *StatefulSetReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &s); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	return r.processPodSpec(ctx, s.Namespace, &s.Spec.Template.Spec)
+	return r.processPodSpec(ctx, s.Namespace, s.Name, &s.Spec.Template.Spec)
 }
 func (r *StatefulSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -119,7 +124,7 @@ func (r *JobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if err := r.Get(ctx, req.NamespacedName, &j); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	return r.processPodSpec(ctx, j.Namespace, &j.Spec.Template.Spec)
+	return r.processPodSpec(ctx, j.Namespace, j.Name, &j.Spec.Template.Spec)
 }
 func (r *JobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -141,7 +146,7 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err := r.Get(ctx, req.NamespacedName, &cj); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	return r.processPodSpec(ctx, cj.Namespace, &cj.Spec.JobTemplate.Spec.Template.Spec)
+	return r.processPodSpec(ctx, cj.Namespace, cj.Name, &cj.Spec.JobTemplate.Spec.Template.Spec)
 }
 func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
@@ -164,7 +169,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if p.Status.Phase == corev1.PodPending || p.Status.Phase == corev1.PodRunning {
-		return r.processPodSpec(ctx, p.Namespace, &p.Spec)
+		return r.processPodSpec(ctx, p.Namespace, p.Name, &p.Spec)
 	}
 	return ctrl.Result{}, nil
 }

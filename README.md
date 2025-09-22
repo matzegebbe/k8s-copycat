@@ -41,6 +41,20 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `REGISTRY_REQUEST_TIMEOUT`: override the timeout for individual pull/push operations (default `2m`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
 
+### Repository prefix templating
+
+When a `repoPrefix` is configured (via config file or the corresponding
+environment variables), the value can include placeholders that are replaced at
+runtime. The following tokens are supported:
+
+- `$namespace` — Namespace of the workload or pod referencing the image
+- `$podname` — Name of the owning resource (or pod when available)
+- `$container_name` — Name of the container that uses the image
+
+For example, setting `repoPrefix: "$namespace/$podname"` ensures that the
+resulting target repositories are unique across namespaces, even when multiple
+workloads reference the same source image.
+
 ### Applying an ECR lifecycle policy
 
 You can provide an [ECR lifecycle policy](https://docs.aws.amazon.com/AmazonECR/latest/userguide/lifecycle_policy_examples.html)

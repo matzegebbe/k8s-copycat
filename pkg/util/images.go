@@ -9,35 +9,36 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-func ImagesFromPodSpec(spec *corev1.PodSpec) []string {
+type PodImage struct {
+	Image         string
+	ContainerName string
+}
+
+func ImagesFromPodSpec(spec *corev1.PodSpec) []PodImage {
 	if spec == nil {
 		return nil
 	}
 
-	seen := make(map[string]struct{}, len(spec.InitContainers)+len(spec.Containers))
-	out := make([]string, 0, len(spec.InitContainers)+len(spec.Containers))
+	out := make([]PodImage, 0, len(spec.InitContainers)+len(spec.Containers)+len(spec.EphemeralContainers))
 
-	add := func(img string) {
+	add := func(name, img string) {
 		img = strings.TrimSpace(img)
+		name = strings.TrimSpace(name)
 		if img == "" {
 			return
 		}
-		if _, ok := seen[img]; ok {
-			return
-		}
-		seen[img] = struct{}{}
-		out = append(out, img)
+		out = append(out, PodImage{Image: img, ContainerName: name})
 	}
 
 	for _, c := range spec.InitContainers {
-		add(c.Image)
+		add(c.Name, c.Image)
 	}
 	for _, c := range spec.Containers {
-		add(c.Image)
+		add(c.Name, c.Image)
 	}
 	// Ephemeral containers (don’t forget these)
 	for _, ec := range spec.EphemeralContainers {
-		add(ec.Image)
+		add(ec.Name, ec.Image)
 	}
 
 	return out

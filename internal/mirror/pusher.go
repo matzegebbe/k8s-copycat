@@ -22,8 +22,15 @@ import (
 )
 
 type Pusher interface {
-	Mirror(ctx context.Context, sourceImage string) error
+	Mirror(ctx context.Context, sourceImage string, meta Metadata) error
 	DryRun() bool
+}
+
+// Metadata captures contextual information about the image being mirrored.
+type Metadata struct {
+	Namespace     string
+	PodName       string
+	ContainerName string
 }
 
 type pusher struct {
@@ -80,12 +87,21 @@ func transport(insecure bool) http.RoundTripper {
 	}
 }
 
-func (p *pusher) Mirror(ctx context.Context, src string) error {
+func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	log := logr.FromContextOrDiscard(ctx)
 	if log.GetSink() == nil {
 		log = p.logger
 	}
-	log = log.WithValues("source", src)
+	log = log.WithValues(
+		"source", src,
+		"namespace", meta.Namespace,
+	)
+	if meta.PodName != "" {
+		log = log.WithValues("pod", meta.PodName)
+	}
+	if meta.ContainerName != "" {
+		log = log.WithValues("container", meta.ContainerName)
+	}
 
 	srcRef, err := name.ParseReference(src, name.WeakValidation)
 	if err != nil {
@@ -94,10 +110,7 @@ func (p *pusher) Mirror(ctx context.Context, src string) error {
 
 	// Build target repo path
 	srcRepo := srcRef.Context().RepositoryStr()
-	repo := p.transform(srcRepo)
-	if pref := p.target.RepoPrefix(); pref != "" {
-		repo = strings.TrimSuffix(pref, "/") + "/" + repo
-	}
+	repo := p.resolveRepoPath(srcRepo, meta)
 
 	var target string
 	var targetRef name.Reference
@@ -232,4 +245,44 @@ func (p *pusher) operationContext(ctx context.Context) (context.Context, context
 		return ctx, func() {}
 	}
 	return context.WithTimeout(ctx, p.requestTimeout)
+}
+
+func (p *pusher) resolveRepoPath(srcRepo string, meta Metadata) string {
+	cleaned := p.transform(srcRepo)
+	prefix := expandRepoPrefix(p.target.RepoPrefix(), meta)
+	if prefix == "" {
+		return cleaned
+	}
+	if cleaned == "" {
+		return util.CleanRepoName(prefix)
+	}
+	combined := strings.TrimSuffix(prefix, "/") + "/" + cleaned
+	return util.CleanRepoName(combined)
+}
+
+func expandRepoPrefix(prefix string, meta Metadata) string {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return ""
+	}
+	replacer := strings.NewReplacer(
+		"$namespace", meta.Namespace,
+		"$podname", meta.PodName,
+		"$container_name", meta.ContainerName,
+	)
+	expanded := replacer.Replace(prefix)
+	expanded = strings.TrimSpace(expanded)
+	if expanded == "" {
+		return ""
+	}
+	segments := strings.Split(expanded, "/")
+	parts := make([]string, 0, len(segments))
+	for _, seg := range segments {
+		seg = strings.TrimSpace(seg)
+		if seg == "" {
+			continue
+		}
+		parts = append(parts, seg)
+	}
+	return strings.Join(parts, "/")
 }
