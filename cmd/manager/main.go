@@ -98,10 +98,10 @@ func main() {
 
 	transformer := util.NewRepoPathTransformer(cfg.PathMap)
 	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, transformer, logger.WithName("mirror"), cfg.Keychain, cfg.RequestTimeout)
-	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS); err != nil {
-		logger.Error(err, "setup controllers failed 🙀")
-		os.Exit(1)
-	}
+        if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg); err != nil {
+                logger.Error(err, "setup controllers failed 🙀")
+                os.Exit(1)
+        }
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		logger.Error(err, "healthz failed 🙀")

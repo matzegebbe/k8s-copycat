@@ -8,6 +8,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -24,14 +25,95 @@ const (
 	retryDelay    = 30 * time.Second
 )
 
+// SkipConfig declares which namespaces or object names should be ignored by the controllers.
+type SkipConfig struct {
+	Namespaces   []string
+	Deployments  []string
+	StatefulSets []string
+	Jobs         []string
+	CronJobs     []string
+	Pods         []string
+}
+
+type nameMatcher struct {
+	matchAll   bool
+	any        map[string]struct{}
+	namespaced map[string]map[string]struct{}
+}
+
+func newNameMatcher(values []string) nameMatcher {
+	m := nameMatcher{}
+	for _, raw := range values {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			continue
+		}
+		if name == "*" {
+			m.matchAll = true
+			continue
+		}
+		if strings.Contains(name, "/") {
+			parts := strings.SplitN(name, "/", 2)
+			ns := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			if ns == "" || val == "" {
+				continue
+			}
+			if m.namespaced == nil {
+				m.namespaced = make(map[string]map[string]struct{})
+			}
+			nsSet := m.namespaced[ns]
+			if nsSet == nil {
+				nsSet = make(map[string]struct{})
+				m.namespaced[ns] = nsSet
+			}
+			nsSet[val] = struct{}{}
+			continue
+		}
+		if m.any == nil {
+			m.any = make(map[string]struct{})
+		}
+		m.any[name] = struct{}{}
+	}
+	return m
+}
+
+func (m nameMatcher) matches(namespace, name string) bool {
+	if m.matchAll {
+		return true
+	}
+	if len(m.any) > 0 {
+		if _, ok := m.any[name]; ok {
+			return true
+		}
+	}
+	if len(m.namespaced) > 0 {
+		if nsSet, ok := m.namespaced[namespace]; ok {
+			if _, ok := nsSet[name]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 type baseReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
 	Pusher            mirror.Pusher
 	AllowedNamespaces []string // "*" or explicit list
+	SkippedNamespaces map[string]struct{}
+	SkipDeployments   nameMatcher
+	SkipStatefulSets  nameMatcher
+	SkipJobs          nameMatcher
+	SkipCronJobs      nameMatcher
+	SkipPods          nameMatcher
 }
 
 func (r *baseReconciler) nsAllowed(ns string) bool {
+	if r.namespaceSkipped(ns) {
+		return false
+	}
 	if len(r.AllowedNamespaces) == 0 {
 		return true
 	}
@@ -44,6 +126,14 @@ func (r *baseReconciler) nsAllowed(ns string) bool {
 		}
 	}
 	return false
+}
+
+func (r *baseReconciler) namespaceSkipped(ns string) bool {
+	if len(r.SkippedNamespaces) == 0 {
+		return false
+	}
+	_, ok := r.SkippedNamespaces[ns]
+	return ok
 }
 
 func (r *baseReconciler) processPodSpec(ctx context.Context, ns, podName string, spec *corev1.PodSpec) (ctrl.Result, error) {
@@ -73,6 +163,9 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
+	if r.SkipDeployments.matches(req.Namespace, req.Name) {
+		return ctrl.Result{}, nil
+	}
 	log := ctrl.LoggerFrom(ctx)
 	log.V(1).Info("saw Deployment", "name", req.Name, "namespace", req.Namespace)
 	var d appsv1.Deployment
@@ -94,6 +187,9 @@ type StatefulSetReconciler struct{ baseReconciler }
 
 func (r *StatefulSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	if !r.nsAllowed(req.Namespace) {
+		return ctrl.Result{}, nil
+	}
+	if r.SkipStatefulSets.matches(req.Namespace, req.Name) {
 		return ctrl.Result{}, nil
 	}
 	log := ctrl.LoggerFrom(ctx)
@@ -118,6 +214,9 @@ func (r *JobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
+	if r.SkipJobs.matches(req.Namespace, req.Name) {
+		return ctrl.Result{}, nil
+	}
 	log := ctrl.LoggerFrom(ctx)
 	log.V(1).Info("saw Job", "name", req.Name, "namespace", req.Namespace)
 	var j batchv1.Job
@@ -138,6 +237,9 @@ type CronJobReconciler struct{ baseReconciler }
 
 func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	if !r.nsAllowed(req.Namespace) {
+		return ctrl.Result{}, nil
+	}
+	if r.SkipCronJobs.matches(req.Namespace, req.Name) {
 		return ctrl.Result{}, nil
 	}
 	log := ctrl.LoggerFrom(ctx)
@@ -162,11 +264,19 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
+	if r.SkipPods.matches(req.Namespace, req.Name) {
+		return ctrl.Result{}, nil
+	}
 	log := ctrl.LoggerFrom(ctx)
 	log.V(1).Info("saw Pod", "name", req.Name, "namespace", req.Namespace)
 	var p corev1.Pod
 	if err := r.Get(ctx, req.NamespacedName, &p); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	if skip, err := r.shouldSkipPod(ctx, &p); err != nil {
+		return ctrl.Result{}, err
+	} else if skip {
+		return ctrl.Result{}, nil
 	}
 	if p.Status.Phase == corev1.PodPending || p.Status.Phase == corev1.PodRunning {
 		return r.processPodSpec(ctx, p.Namespace, p.Name, &p.Spec)
@@ -181,20 +291,107 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string) error {
-	if err := (&DeploymentReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
+func (r *PodReconciler) shouldSkipPod(ctx context.Context, pod *corev1.Pod) (bool, error) {
+	if r.SkipPods.matches(pod.Namespace, pod.Name) {
+		return true, nil
+	}
+	for _, owner := range pod.OwnerReferences {
+		switch owner.Kind {
+		case "ReplicaSet":
+			skip, err := r.shouldSkipReplicaSetOwner(ctx, pod.Namespace, owner.Name)
+			if err != nil {
+				return false, err
+			}
+			if skip {
+				return true, nil
+			}
+		case "Deployment":
+			if r.SkipDeployments.matches(pod.Namespace, owner.Name) {
+				return true, nil
+			}
+		case "StatefulSet":
+			if r.SkipStatefulSets.matches(pod.Namespace, owner.Name) {
+				return true, nil
+			}
+		case "Job":
+			skip, err := r.shouldSkipJobOwner(ctx, pod.Namespace, owner.Name)
+			if err != nil {
+				return false, err
+			}
+			if skip {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+func (r *PodReconciler) shouldSkipReplicaSetOwner(ctx context.Context, namespace, name string) (bool, error) {
+	var rs appsv1.ReplicaSet
+	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &rs); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	for _, owner := range rs.OwnerReferences {
+		if owner.Kind == "Deployment" && r.SkipDeployments.matches(namespace, owner.Name) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *PodReconciler) shouldSkipJobOwner(ctx context.Context, namespace, name string) (bool, error) {
+	if r.SkipJobs.matches(namespace, name) {
+		return true, nil
+	}
+	var job batchv1.Job
+	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &job); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	for _, owner := range job.OwnerReferences {
+		if owner.Kind == "CronJob" && r.SkipCronJobs.matches(namespace, owner.Name) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCfg SkipConfig) error {
+	base := baseReconciler{
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Pusher:            pusher,
+		AllowedNamespaces: allowedNS,
+		SkippedNamespaces: make(map[string]struct{}, len(skipCfg.Namespaces)),
+		SkipDeployments:   newNameMatcher(skipCfg.Deployments),
+		SkipStatefulSets:  newNameMatcher(skipCfg.StatefulSets),
+		SkipJobs:          newNameMatcher(skipCfg.Jobs),
+		SkipCronJobs:      newNameMatcher(skipCfg.CronJobs),
+		SkipPods:          newNameMatcher(skipCfg.Pods),
+	}
+	for _, ns := range skipCfg.Namespaces {
+		if trimmed := strings.TrimSpace(ns); trimmed != "" {
+			base.SkippedNamespaces[trimmed] = struct{}{}
+		}
+	}
+	if err := (&DeploymentReconciler{base}).SetupWithManager(mgr); err != nil {
 		return err
 	}
-	if err := (&StatefulSetReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
+	if err := (&StatefulSetReconciler{base}).SetupWithManager(mgr); err != nil {
 		return err
 	}
-	if err := (&JobReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
+	if err := (&JobReconciler{base}).SetupWithManager(mgr); err != nil {
 		return err
 	}
-	if err := (&CronJobReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
+	if err := (&CronJobReconciler{base}).SetupWithManager(mgr); err != nil {
 		return err
 	}
-	if err := (&PodReconciler{baseReconciler{Client: mgr.GetClient(), Scheme: mgr.GetScheme(), Pusher: pusher, AllowedNamespaces: allowedNS}}).SetupWithManager(mgr); err != nil {
+	if err := (&PodReconciler{base}).SetupWithManager(mgr); err != nil {
 		return err
 	}
 	return nil

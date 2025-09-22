@@ -94,6 +94,18 @@ spec:
             #  value: "/config/config.yaml"
             - name: INCLUDE_NAMESPACES
               value: "test"
+            #- name: SKIP_NAMESPACES
+            #  value: "kube-system,copycat"
+            #- name: SKIP_DEPLOYMENTS
+            #  value: "copycat"
+            #- name: SKIP_STATEFULSETS
+            #  value: "redis"
+            #- name: SKIP_JOBS
+            #  value: "backup"
+            #- name: SKIP_CRONJOBS
+            #  value: "nightly"
+            #- name: SKIP_PODS
+            #  value: "custom-pod"
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits:   { cpu: 500m, memory: 256Mi }
@@ -134,6 +146,13 @@ data:
     logLevel: debug         # debug | info | warn | error | dpanic | panic | fatal
     dryRun: false
     includeNamespaces: ["test"]
+    # skipNamespaces: ["kube-system"]
+    # skipNames:
+    #   deployments: ["copycat"]
+    #   statefulSets: ["redis"]
+    #   jobs: ["backup"]
+    #   cronJobs: ["nightly"]
+    #   pods: ["custom-pod"]
     requestTimeout: 2m
     #ecr:
     #  accountID: "123456789012"
