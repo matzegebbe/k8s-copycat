@@ -11,6 +11,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 
 	"github.com/matzegebbe/k8s-copycat/internal/config"
+	"github.com/matzegebbe/k8s-copycat/internal/controllers"
 	"github.com/matzegebbe/k8s-copycat/internal/mirror"
 	"github.com/matzegebbe/k8s-copycat/internal/registry"
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
@@ -31,6 +32,7 @@ func loadConfigFile() (config.Config, bool, error) {
 // runtimeConfig holds all runtime configuration derived from flags, env vars and the config file.
 type runtimeConfig struct {
 	AllowedNS      []string
+	SkipCfg        controllers.SkipConfig
 	Target         registry.Target
 	DryRun         bool
 	PathMap        []util.PathMapping
@@ -43,6 +45,14 @@ const defaultRequestTimeout = 2 * time.Minute
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
 func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Config, cfgFound bool) (runtimeConfig, error) {
 	allowedNS := resolveAllowedNamespaces(os.Getenv("INCLUDE_NAMESPACES"), fileCfg.IncludeNamespaces)
+	skipCfg := controllers.SkipConfig{
+		Namespaces:   resolveList(os.Getenv("SKIP_NAMESPACES"), fileCfg.SkipNamespaces),
+		Deployments:  resolveList(os.Getenv("SKIP_DEPLOYMENTS"), fileCfg.SkipNames.Deployments),
+		StatefulSets: resolveList(os.Getenv("SKIP_STATEFULSETS"), fileCfg.SkipNames.StatefulSets),
+		Jobs:         resolveList(os.Getenv("SKIP_JOBS"), fileCfg.SkipNames.Jobs),
+		CronJobs:     resolveList(os.Getenv("SKIP_CRONJOBS"), fileCfg.SkipNames.CronJobs),
+		Pods:         resolveList(os.Getenv("SKIP_PODS"), fileCfg.SkipNames.Pods),
+	}
 
 	targetKind := os.Getenv("TARGET_KIND")
 	if targetKind == "" && cfgFound {
@@ -151,6 +161,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 
 	return runtimeConfig{
 		AllowedNS:      allowedNS,
+		SkipCfg:        skipCfg,
 		Target:         t,
 		DryRun:         dryRun,
 		PathMap:        fileCfg.PathMap,
@@ -160,25 +171,27 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 }
 
 func resolveAllowedNamespaces(envVal string, configValues []string) []string {
-	if trimmed := strings.TrimSpace(envVal); trimmed != "" {
-		if ns := sanitizeNamespaces(strings.Split(trimmed, ",")); len(ns) > 0 {
-			return ns
-		}
-	}
-	if ns := sanitizeNamespaces(configValues); len(ns) > 0 {
+	if ns := resolveList(envVal, configValues); len(ns) > 0 {
 		return ns
 	}
 	return []string{"*"}
 }
 
-func sanitizeNamespaces(values []string) []string {
-	allowed := make([]string, 0, len(values))
-	for _, ns := range values {
-		if trimmed := strings.TrimSpace(ns); trimmed != "" {
-			allowed = append(allowed, trimmed)
+func resolveList(envVal string, configValues []string) []string {
+	if trimmed := strings.TrimSpace(envVal); trimmed != "" {
+		return sanitizeStringList(strings.Split(trimmed, ","))
+	}
+	return sanitizeStringList(configValues)
+}
+
+func sanitizeStringList(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, val := range values {
+		if trimmed := strings.TrimSpace(val); trimmed != "" {
+			out = append(out, trimmed)
 		}
 	}
-	return allowed
+	return out
 }
 
 func buildKeychainFromConfig(creds []config.RegistryCredential) authn.Keychain {

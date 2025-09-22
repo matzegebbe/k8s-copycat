@@ -38,6 +38,8 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO` (for ECR)
 - `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD`, `TARGET_INSECURE` (for Docker)
 - `INCLUDE_NAMESPACES`: `*` or comma-separated list (e.g., `default,prod`)
+- `SKIP_NAMESPACES`: comma-separated namespaces that should be ignored entirely
+- `SKIP_DEPLOYMENTS`, `SKIP_STATEFULSETS`, `SKIP_JOBS`, `SKIP_CRONJOBS`, `SKIP_PODS`: comma-separated workload names to ignore
 - `REGISTRY_REQUEST_TIMEOUT`: override the timeout for individual pull/push operations (default `2m`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
 
@@ -88,6 +90,10 @@ pathMap:
   - from: "^legacy/(.*)"
     to: "modern/$1"
     regex: true
+skipNamespaces: ["kube-system"]
+skipNames:
+  deployments: ["copycat"]
+  cronJobs: ["nightly"]
 ```
 
 Rules are evaluated in order, with the first matching entry applied. Leaving

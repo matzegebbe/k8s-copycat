@@ -13,11 +13,11 @@ import (
 const FilePath = "/config/config.yaml"
 
 type ECR struct {
-        AccountID  string `yaml:"accountID"`
-        Region     string `yaml:"region"`
-        RepoPrefix string `yaml:"repoPrefix"`
-        CreateRepo *bool  `yaml:"createRepo"`
-        LifecyclePolicy string `yaml:"lifecyclePolicy"`
+	AccountID       string `yaml:"accountID"`
+	Region          string `yaml:"region"`
+	RepoPrefix      string `yaml:"repoPrefix"`
+	CreateRepo      *bool  `yaml:"createRepo"`
+	LifecyclePolicy string `yaml:"lifecyclePolicy"`
 }
 
 type Docker struct {
@@ -47,10 +47,21 @@ type Config struct {
 	ECR                 ECR                  `yaml:"ecr"`
 	Docker              Docker               `yaml:"docker"`
 	IncludeNamespaces   []string             `yaml:"includeNamespaces"`
+	SkipNamespaces      []string             `yaml:"skipNamespaces"`
+	SkipNames           ResourceSkipNames    `yaml:"skipNames"`
 	DryRun              bool                 `yaml:"dryRun"`
 	RequestTimeout      string               `yaml:"requestTimeout"`
 	RegistryCredentials []RegistryCredential `yaml:"registryCredentials"`
 	PathMap             []util.PathMapping   `yaml:"pathMap"`
+}
+
+// ResourceSkipNames declares resource names that should be ignored by copycat.
+type ResourceSkipNames struct {
+	Deployments  []string `yaml:"deployments"`
+	StatefulSets []string `yaml:"statefulSets"`
+	Jobs         []string `yaml:"jobs"`
+	CronJobs     []string `yaml:"cronJobs"`
+	Pods         []string `yaml:"pods"`
 }
 
 func Load(path string) (Config, bool, error) {
