@@ -174,6 +174,8 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	log = log.WithValues("target", target)
 
+	log.Info("resolved target reference", "reference", target)
+
 	if skip, err := p.beginProcessing(target, log); err != nil {
 		log.Error(err, "unable to begin processing")
 		return err
