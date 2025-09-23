@@ -18,6 +18,7 @@ import (
 	remotetransport "github.com/google/go-containerregistry/pkg/v1/remote/transport"
 
 	"github.com/matzegebbe/k8s-copycat/internal/registry"
+	"github.com/matzegebbe/k8s-copycat/pkg/metrics"
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -193,6 +194,8 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return p.failureResult(target, fmt.Errorf("pull %s: %w", src, err))
 	}
 
+	metrics.RecordPullSuccess(src)
+
 	log.V(1).Info("finished pulling image from source")
 
 	srcDigest, err := img.Digest()
@@ -251,6 +254,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return p.failureResult(target, fmt.Errorf("push %s: %w", target, err))
 	}
 	log.Info("finished pushing image")
+	metrics.RecordPushSuccess(target)
 	return nil
 }
 

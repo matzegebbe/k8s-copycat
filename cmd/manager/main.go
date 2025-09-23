@@ -36,12 +36,12 @@ func init() {
 }
 
 func main() {
-	var metricsAddr string
-	var probeAddr string
+	metricsAddr := envOrDefault("METRICS_ADDR", ":8080")
+	probeAddr := ":8081"
 	var enableLeaderElection bool
 
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "metrics bind address")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "health probe bind address")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", metricsAddr, "metrics bind address")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", probeAddr, "health probe bind address")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", true, "enable leader election")
 	var dryRunFlag bool
 	flag.BoolVar(&dryRunFlag, "dry-run", false, "simulate image push without actually pushing")
@@ -83,7 +83,7 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "k8s-copycat.k8s-copycat",
 	}
-	if !(len(cfg.AllowedNS) == 1 && cfg.AllowedNS[0] == "*") {
+	if len(cfg.AllowedNS) != 1 || cfg.AllowedNS[0] != "*" {
 		nsMap := make(map[string]cache.Config, len(cfg.AllowedNS))
 		for _, ns := range cfg.AllowedNS {
 			nsMap[ns] = cache.Config{}
@@ -98,10 +98,10 @@ func main() {
 
 	transformer := util.NewRepoPathTransformer(cfg.PathMap)
 	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, transformer, logger.WithName("mirror"), cfg.Keychain, cfg.RequestTimeout)
-        if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg); err != nil {
-                logger.Error(err, "setup controllers failed 🙀")
-                os.Exit(1)
-        }
+	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg); err != nil {
+		logger.Error(err, "setup controllers failed 🙀")
+		os.Exit(1)
+	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		logger.Error(err, "healthz failed 🙀")
@@ -134,4 +134,12 @@ func logStartupError(err error, msg string, keysAndValues ...any) {
 	var opts zap.Options
 	configureJSONLogging(&opts)
 	zap.New(zap.UseFlagOptions(&opts)).Error(err, msg, keysAndValues...)
+}
+
+func envOrDefault(key, fallback string) string {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	return value
 }

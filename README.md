@@ -41,6 +41,7 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `SKIP_NAMESPACES`: comma-separated namespaces that should be ignored entirely
 - `SKIP_DEPLOYMENTS`, `SKIP_STATEFULSETS`, `SKIP_JOBS`, `SKIP_CRONJOBS`, `SKIP_PODS`: comma-separated workload names to ignore
 - `REGISTRY_REQUEST_TIMEOUT`: override the timeout for individual pull/push operations (default `2m`)
+- `METRICS_ADDR`: bind address for the Prometheus metrics endpoint (default `:8080`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
 
 ### Repository prefix templating
@@ -139,3 +140,41 @@ Enable dry run mode by either:
 
 - Passing the `--dry-run` flag to the binary
 - Setting `dryRun: true` in your config file
+
+## Metrics
+
+k8s-copycat exposes Prometheus metrics on `/metrics`. The listener binds to the
+address configured via `METRICS_ADDR` (default `:8080`).
+
+### Scraping with Prometheus
+
+Add a scrape job to your Prometheus configuration:
+
+```yaml
+scrape_configs:
+  - job_name: "k8s-copycat"
+    static_configs:
+      - targets: ["k8s-copycat.default.svc:8080"]
+```
+
+The service publishes the following counters labelled by the image name:
+
+- `app_registry_pull_success_total{image="<name>"}`
+- `app_registry_push_success_total{image="<name>"}`
+
+### Example Queries
+
+```promql
+sum by (image) (rate(app_registry_pull_success_total[5m]))
+```
+
+```promql
+sum(rate(app_registry_push_success_total[5m]))
+```
+
+These queries reveal the busiest images and the overall push throughput.
+
+## Contributing
+
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the coding standards,
+linters, and Conventional Commits policy.
