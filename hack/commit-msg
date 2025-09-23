@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+commit_msg_file=${1:-}
+if [[ -z "${commit_msg_file}" ]]; then
+        echo "usage: $0 <commit-msg-file>" >&2
+        exit 1
+fi
+
+commit_msg=$(head -n1 "${commit_msg_file}" | tr -d '\r')
+
+pattern='^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)(\([a-z0-9_.-]+\))?(!!|!|\+)?: .+'
+
+if [[ "${commit_msg}" =~ ${pattern} ]]; then
+        exit 0
+fi
+
+echo "Conventional Commits check failed" >&2
+echo "Expected <type>(<scope>)?: <description>" >&2
+echo "See https://www.conventionalcommits.org/ for details." >&2
+exit 1
