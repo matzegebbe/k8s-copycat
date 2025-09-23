@@ -44,12 +44,39 @@ func ImagesFromPodSpec(spec *corev1.PodSpec) []PodImage {
 	return out
 }
 
+const maxRepoNameLength = 256
+
 var repoAllowed = regexp.MustCompile(`[^a-z0-9_/.-]`)
 
 func CleanRepoName(path string) string {
 	p := strings.ToLower(strings.TrimPrefix(path, "/"))
 	p = repoAllowed.ReplaceAllString(p, "-")
 	p = strings.Trim(p, "-/.")
+	if len(p) > maxRepoNameLength {
+		hash := ShortDigest(p)
+		// Leave room for the hash suffix to preserve uniqueness.
+		keep := maxRepoNameLength - len(hash) - 1
+		if keep < 0 {
+			keep = 0
+		}
+		if keep > len(p) {
+			keep = len(p)
+		}
+		trimmed := strings.TrimRight(p[:keep], "-/.")
+		if trimmed == "" {
+			p = hash
+		} else {
+			p = trimmed + "-" + hash
+		}
+		p = strings.Trim(p, "-/.")
+		if len(p) > maxRepoNameLength {
+			if len(hash) >= maxRepoNameLength {
+				p = strings.Trim(hash[:maxRepoNameLength], "-/.")
+			} else {
+				p = strings.Trim(p[:maxRepoNameLength], "-/.")
+			}
+		}
+	}
 	if p == "" {
 		p = "library/unknown"
 	}

@@ -123,8 +123,18 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		target = fmt.Sprintf("%s/%s:%s", p.target.Registry(), repo, r.TagStr())
 		targetRef, err = name.NewTag(target, opts...)
 	case name.Digest:
-		target = fmt.Sprintf("%s/%s@%s", p.target.Registry(), repo, r.DigestStr())
-		targetRef, err = name.NewDigest(target, opts...)
+		stripped := src
+		if idx := strings.Index(stripped, "@"); idx > 0 {
+			stripped = stripped[:idx]
+		}
+		// Try to honour the original tag when the source reference included both tag and digest.
+		if tagRef, tagErr := name.NewTag(stripped, name.WeakValidation); tagErr == nil {
+			target = fmt.Sprintf("%s/%s:%s", p.target.Registry(), repo, tagRef.TagStr())
+			targetRef, err = name.NewTag(target, opts...)
+		} else {
+			target = fmt.Sprintf("%s/%s@%s", p.target.Registry(), repo, r.DigestStr())
+			targetRef, err = name.NewDigest(target, opts...)
+		}
 	default:
 		return fmt.Errorf("unsupported reference type %T", srcRef)
 	}
