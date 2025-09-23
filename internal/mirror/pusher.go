@@ -3,6 +3,7 @@ package mirror
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -34,14 +35,40 @@ type Metadata struct {
 }
 
 type pusher struct {
-	target         registry.Target
-	dryRun         bool
-	transform      func(string) string
-	mu             sync.Mutex
-	pushed         map[string]struct{}
-	logger         logr.Logger
-	keychain       authn.Keychain
-	requestTimeout time.Duration
+	target          registry.Target
+	dryRun          bool
+	transform       func(string) string
+	mu              sync.Mutex
+	pushed          map[string]struct{}
+	logger          logr.Logger
+	keychain        authn.Keychain
+	requestTimeout  time.Duration
+	failureCooldown time.Duration
+	failed          map[string]time.Time
+	now             func() time.Time
+}
+
+const defaultFailureCooldown = 24 * time.Hour
+
+var ErrInCooldown = errors.New("mirror: target is in failure cooldown")
+
+type RetryError struct {
+	Cause   error
+	RetryAt time.Time
+}
+
+func (e *RetryError) Error() string {
+	if e == nil {
+		return ""
+	}
+	return e.Cause.Error()
+}
+
+func (e *RetryError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
 }
 
 func NewPusher(t registry.Target, dryRun bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration) Pusher {
@@ -60,13 +87,16 @@ func NewPusher(t registry.Target, dryRun bool, transform func(string) string, lo
 		requestTimeout = 0
 	}
 	return &pusher{
-		target:         t,
-		dryRun:         dryRun,
-		transform:      transform,
-		pushed:         make(map[string]struct{}),
-		logger:         logger,
-		keychain:       keychain,
-		requestTimeout: requestTimeout,
+		target:          t,
+		dryRun:          dryRun,
+		transform:       transform,
+		pushed:          make(map[string]struct{}),
+		logger:          logger,
+		keychain:        keychain,
+		requestTimeout:  requestTimeout,
+		failureCooldown: defaultFailureCooldown,
+		failed:          make(map[string]time.Time),
+		now:             time.Now,
 	}
 }
 
@@ -144,18 +174,12 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	log = log.WithValues("target", target)
 
-	p.mu.Lock()
-	if _, exists := p.pushed[target]; exists {
-		p.mu.Unlock()
-		if p.dryRun {
-			log.Info("image already processed during current run", "result", "skipped", "dryRun", true)
-		} else {
-			log.V(1).Info("image already processed during current run", "result", "skipped")
-		}
+	if skip, err := p.beginProcessing(target, log); err != nil {
+		log.Error(err, "unable to begin processing")
+		return err
+	} else if skip {
 		return nil
 	}
-	p.pushed[target] = struct{}{}
-	p.mu.Unlock()
 
 	log.V(1).Info("starting pull from source")
 
@@ -164,30 +188,21 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	img, err := remote.Image(srcRef, remote.WithContext(pullCtx), remote.WithAuthFromKeychain(p.keychain), remote.WithTransport(transport(p.target.Insecure())))
 	if err != nil {
-		p.mu.Lock()
-		delete(p.pushed, target)
-		p.mu.Unlock()
-		return fmt.Errorf("pull %s: %w", src, err)
+		return p.failureResult(target, fmt.Errorf("pull %s: %w", src, err))
 	}
 
 	log.V(1).Info("finished pulling image from source")
 
 	srcDigest, err := img.Digest()
 	if err != nil {
-		p.mu.Lock()
-		delete(p.pushed, target)
-		p.mu.Unlock()
-		return fmt.Errorf("digest %s: %w", src, err)
+		return p.failureResult(target, fmt.Errorf("digest %s: %w", src, err))
 	}
 
 	log.V(1).Info("resolving target registry credentials")
 
 	username, password, err := p.target.BasicAuth(ctx)
 	if err != nil {
-		p.mu.Lock()
-		delete(p.pushed, target)
-		p.mu.Unlock()
-		return fmt.Errorf("auth: %w", err)
+		return p.failureResult(target, fmt.Errorf("auth: %w", err))
 	}
 
 	if username != "" || password != "" {
@@ -215,17 +230,11 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	} else if te, ok := headErr.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
 		// continue to push
 	} else if headErr != nil {
-		p.mu.Lock()
-		delete(p.pushed, target)
-		p.mu.Unlock()
-		return fmt.Errorf("check %s: %w", target, headErr)
+		return p.failureResult(target, fmt.Errorf("check %s: %w", target, headErr))
 	}
 
 	if err := p.target.EnsureRepository(ctx, repo); err != nil {
-		p.mu.Lock()
-		delete(p.pushed, target)
-		p.mu.Unlock()
-		return fmt.Errorf("ensure repo %s: %w", repo, err)
+		return p.failureResult(target, fmt.Errorf("ensure repo %s: %w", repo, err))
 	}
 
 	if p.dryRun {
@@ -237,10 +246,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	err = remote.Write(targetRef, img, remote.WithAuth(auth), remote.WithContext(pushCtx), remote.WithTransport(transport(p.target.Insecure())))
 	cancelPush()
 	if err != nil {
-		p.mu.Lock()
-		delete(p.pushed, target)
-		p.mu.Unlock()
-		return fmt.Errorf("push %s: %w", target, err)
+		return p.failureResult(target, fmt.Errorf("push %s: %w", target, err))
 	}
 	log.Info("finished pushing image")
 	return nil
@@ -255,6 +261,58 @@ func (p *pusher) operationContext(ctx context.Context) (context.Context, context
 		return ctx, func() {}
 	}
 	return context.WithTimeout(ctx, p.requestTimeout)
+}
+
+func (p *pusher) beginProcessing(target string, log logr.Logger) (bool, error) {
+	log.V(1).Info("evaluating processing state for target")
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.failureCooldown > 0 {
+		if lastFailure, ok := p.failed[target]; ok {
+			retryAt := lastFailure.Add(p.failureCooldown)
+			now := p.now()
+			if now.Before(retryAt) {
+				err := &RetryError{Cause: ErrInCooldown, RetryAt: retryAt}
+				log.Error(err, "skipping image due to previous failure", "retryAt", retryAt)
+				return false, err
+			}
+			delete(p.failed, target)
+		}
+	}
+
+	if _, exists := p.pushed[target]; exists {
+		if p.dryRun {
+			log.Info("image already processed during current run", "result", "skipped", "dryRun", true)
+		} else {
+			log.V(1).Info("image already processed during current run", "result", "skipped")
+		}
+		return true, nil
+	}
+
+	p.pushed[target] = struct{}{}
+	return false, nil
+}
+
+func (p *pusher) failureResult(target string, cause error) error {
+	now := p.now()
+	retryAt := now.Add(p.failureCooldown)
+
+	p.mu.Lock()
+	delete(p.pushed, target)
+	if p.failureCooldown > 0 {
+		if p.failed == nil {
+			p.failed = make(map[string]time.Time)
+		}
+		p.failed[target] = now
+	}
+	p.mu.Unlock()
+
+	if p.failureCooldown > 0 {
+		return &RetryError{Cause: cause, RetryAt: retryAt}
+	}
+	return cause
 }
 
 func (p *pusher) resolveRepoPath(srcRepo string, meta Metadata) string {

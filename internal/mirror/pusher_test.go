@@ -3,7 +3,9 @@ package mirror
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/go-logr/logr/testr"
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
 
@@ -67,3 +69,97 @@ func TestExpandRepoPrefixSkipsEmptySegments(t *testing.T) {
 		})
 	}
 }
+
+func TestBeginProcessingSkipsDuringCooldown(t *testing.T) {
+	now := time.Now()
+	target := "example.com/repo:tag"
+	p := &pusher{
+		dryRun:          false,
+		pushed:          make(map[string]struct{}),
+		failed:          map[string]time.Time{target: now.Add(-30 * time.Minute)},
+		failureCooldown: time.Hour,
+		now: func() time.Time {
+			return now
+		},
+	}
+
+	skip, err := p.beginProcessing(target, testr.New(t))
+	if skip {
+		t.Fatalf("expected skip to be false when in cooldown")
+	}
+	if err == nil {
+		t.Fatalf("expected error while in cooldown")
+	}
+	retryErr, ok := err.(*RetryError)
+	if !ok {
+		t.Fatalf("expected RetryError, got %T", err)
+	}
+	expectedRetry := p.failed[target].Add(p.failureCooldown)
+	if !retryErr.RetryAt.Equal(expectedRetry) {
+		t.Fatalf("expected retry at %v, got %v", expectedRetry, retryErr.RetryAt)
+	}
+	if _, exists := p.pushed[target]; exists {
+		t.Fatalf("expected target not to be marked as pushed")
+	}
+}
+
+func TestBeginProcessingAllowsAfterCooldown(t *testing.T) {
+	now := time.Now()
+	target := "example.com/repo:tag"
+	p := &pusher{
+		dryRun:          false,
+		pushed:          make(map[string]struct{}),
+		failed:          map[string]time.Time{target: now.Add(-2 * time.Hour)},
+		failureCooldown: time.Hour,
+		now: func() time.Time {
+			return now
+		},
+	}
+
+	skip, err := p.beginProcessing(target, testr.New(t))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if skip {
+		t.Fatalf("expected processing to continue after cooldown")
+	}
+	if _, exists := p.pushed[target]; !exists {
+		t.Fatalf("expected target to be marked as pushed")
+	}
+	if _, failed := p.failed[target]; failed {
+		t.Fatalf("expected failure record to be cleared after cooldown")
+	}
+}
+
+func TestFailureResultRecordsState(t *testing.T) {
+	now := time.Now()
+	target := "example.com/repo:tag"
+	p := &pusher{
+		pushed:          map[string]struct{}{target: {}},
+		failed:          make(map[string]time.Time),
+		failureCooldown: time.Hour,
+		now: func() time.Time {
+			return now
+		},
+	}
+
+	err := p.failureResult(target, assertError("boom"))
+	retryErr, ok := err.(*RetryError)
+	if !ok {
+		t.Fatalf("expected RetryError, got %T", err)
+	}
+	expectedRetry := now.Add(time.Hour)
+	if !retryErr.RetryAt.Equal(expectedRetry) {
+		t.Fatalf("unexpected retry at %v", retryErr.RetryAt)
+	}
+	if _, exists := p.pushed[target]; exists {
+		t.Fatalf("expected target to be removed from pushed set")
+	}
+	if ts, ok := p.failed[target]; !ok || ts != now {
+		t.Fatalf("expected failure timestamp to be recorded, got %v", ts)
+	}
+}
+
+type assertError string
+
+func (a assertError) Error() string { return string(a) }

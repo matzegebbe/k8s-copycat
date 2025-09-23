@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -21,8 +22,8 @@ import (
 )
 
 const (
-	maxConcurrent = 2
-	retryDelay    = 30 * time.Second
+	maxConcurrent     = 2
+	defaultRetryDelay = 24 * time.Hour
 )
 
 // SkipConfig declares which namespaces or object names should be ignored by the controllers.
@@ -151,7 +152,15 @@ func (r *baseReconciler) processPodSpec(ctx context.Context, ns, podName string,
 			ContainerName: img.ContainerName,
 		}
 		if err := r.Pusher.Mirror(ctx, img.Image, meta); err != nil {
-			return ctrl.Result{RequeueAfter: retryDelay}, nil
+			var retryErr *mirror.RetryError
+			if errors.As(err, &retryErr) {
+				delay := time.Until(retryErr.RetryAt)
+				if delay <= 0 {
+					delay = defaultRetryDelay
+				}
+				return ctrl.Result{RequeueAfter: delay}, nil
+			}
+			return ctrl.Result{RequeueAfter: defaultRetryDelay}, nil
 		}
 	}
 	return ctrl.Result{}, nil
