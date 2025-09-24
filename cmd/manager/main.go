@@ -83,6 +83,11 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "k8s-copycat.k8s-copycat",
 	}
+	if len(cfg.AllowedNS) == 1 && cfg.AllowedNS[0] == "*" {
+		logger.Info("listing resources in all namespaces")
+	} else {
+		logger.Info("listing resources in configured namespaces", "namespaces", cfg.AllowedNS)
+	}
 	if len(cfg.AllowedNS) != 1 || cfg.AllowedNS[0] != "*" {
 		nsMap := make(map[string]cache.Config, len(cfg.AllowedNS))
 		for _, ns := range cfg.AllowedNS {
@@ -97,7 +102,7 @@ func main() {
 	}
 
 	transformer := util.NewRepoPathTransformer(cfg.PathMap)
-	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, transformer, logger.WithName("mirror"), cfg.Keychain, cfg.RequestTimeout)
+	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, transformer, logger.WithName("mirror"), cfg.Keychain, cfg.RequestTimeout, cfg.FailureCooldown)
 	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg); err != nil {
 		logger.Error(err, "setup controllers failed 🙀")
 		os.Exit(1)

@@ -41,6 +41,7 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `SKIP_NAMESPACES`: comma-separated namespaces that should be ignored entirely
 - `SKIP_DEPLOYMENTS`, `SKIP_STATEFULSETS`, `SKIP_JOBS`, `SKIP_CRONJOBS`, `SKIP_PODS`: comma-separated workload names to ignore
 - `REGISTRY_REQUEST_TIMEOUT`: override the timeout for individual pull/push operations (default `2m`)
+- `FAILURE_COOLDOWN_MINUTES`: minutes to wait before retrying a failed mirror operation (default `1440`, set to `0` to disable)
 - `METRICS_ADDR`: bind address for the Prometheus metrics endpoint (default `:8080`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
 
@@ -108,6 +109,7 @@ mirroring into a different target such as ECR.
 
 ```yaml
 requestTimeout: 2m
+failureCooldownMinutes: 60   # retry failed pushes after one hour; set to 0 to disable the cooldown
 registryCredentials:
   - registry: registry-1.docker.io
     usernameEnv: DOCKERHUB_USERNAME
@@ -115,6 +117,8 @@ registryCredentials:
   - registry: ghcr.io
     tokenEnv: GHCR_TOKEN
 ```
+
+When `failureCooldownMinutes` is set to `0`, copycat retries failed pushes immediately without recording cooldown state. Omit the field to use the default of 24 hours.
 
 Credentials can be supplied directly in the configuration file via `username`,
 `password`, or `token`, but using environment variables (referenced through

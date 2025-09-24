@@ -154,6 +154,7 @@ data:
     #   cronJobs: ["nightly"]
     #   pods: ["custom-pod"]
     requestTimeout: 2m
+    # failureCooldownMinutes: 1440   # retry failed pushes after one day; set to 0 to disable the cooldown
     #ecr:
     #  accountID: "123456789012"
     #  region: "eu-central-1"

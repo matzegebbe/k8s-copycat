@@ -49,7 +49,7 @@ type pusher struct {
 	now             func() time.Time
 }
 
-const defaultFailureCooldown = 24 * time.Hour
+const DefaultFailureCooldown = 24 * time.Hour
 
 var ErrInCooldown = errors.New("mirror: target is in failure cooldown")
 
@@ -72,7 +72,7 @@ func (e *RetryError) Unwrap() error {
 	return e.Cause
 }
 
-func NewPusher(t registry.Target, dryRun bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration) Pusher {
+func NewPusher(t registry.Target, dryRun bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration) Pusher {
 	if transform == nil {
 		transform = util.CleanRepoName
 	}
@@ -87,6 +87,9 @@ func NewPusher(t registry.Target, dryRun bool, transform func(string) string, lo
 	if requestTimeout < 0 {
 		requestTimeout = 0
 	}
+	if failureCooldown < 0 {
+		failureCooldown = DefaultFailureCooldown
+	}
 	return &pusher{
 		target:          t,
 		dryRun:          dryRun,
@@ -95,7 +98,7 @@ func NewPusher(t registry.Target, dryRun bool, transform func(string) string, lo
 		logger:          logger,
 		keychain:        keychain,
 		requestTimeout:  requestTimeout,
-		failureCooldown: defaultFailureCooldown,
+		failureCooldown: failureCooldown,
 		failed:          make(map[string]time.Time),
 		now:             time.Now,
 	}
