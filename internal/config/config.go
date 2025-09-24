@@ -42,18 +42,19 @@ type RegistryCredential struct {
 }
 
 type Config struct {
-	TargetKind             string               `yaml:"targetKind"` // ecr | docker
-	LogLevel               string               `yaml:"logLevel"`
-	ECR                    ECR                  `yaml:"ecr"`
-	Docker                 Docker               `yaml:"docker"`
-	IncludeNamespaces      []string             `yaml:"includeNamespaces"`
-	SkipNamespaces         []string             `yaml:"skipNamespaces"`
-	SkipNames              ResourceSkipNames    `yaml:"skipNames"`
-	DryRun                 bool                 `yaml:"dryRun"`
-	RequestTimeout         string               `yaml:"requestTimeout"`
-	FailureCooldownMinutes *int                 `yaml:"failureCooldownMinutes"`
-	RegistryCredentials    []RegistryCredential `yaml:"registryCredentials"`
-	PathMap                []util.PathMapping   `yaml:"pathMap"`
+	TargetKind              string               `yaml:"targetKind"` // ecr | docker
+	LogLevel                string               `yaml:"logLevel"`
+	ECR                     ECR                  `yaml:"ecr"`
+	Docker                  Docker               `yaml:"docker"`
+	IncludeNamespaces       []string             `yaml:"includeNamespaces"`
+	SkipNamespaces          []string             `yaml:"skipNamespaces"`
+	SkipNames               ResourceSkipNames    `yaml:"skipNames"`
+	DryRun                  bool                 `yaml:"dryRun"`
+	RequestTimeout          string               `yaml:"requestTimeout"`
+	FailureCooldownMinutes  *int                 `yaml:"failureCooldownMinutes"`
+	MaxConcurrentReconciles *int                 `yaml:"maxConcurrentReconciles"`
+	RegistryCredentials     []RegistryCredential `yaml:"registryCredentials"`
+	PathMap                 []util.PathMapping   `yaml:"pathMap"`
 }
 
 // ResourceSkipNames declares resource names that should be ignored by copycat.

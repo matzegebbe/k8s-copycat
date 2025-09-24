@@ -94,10 +94,14 @@ skipNamespaces: ["kube-system"]
 skipNames:
   deployments: ["copycat"]
   cronJobs: ["nightly"]
+maxConcurrentReconciles: 4
 ```
 
 Rules are evaluated in order, with the first matching entry applied. Leaving
 `pathMap` empty keeps repository paths unchanged.
+
+When `maxConcurrentReconciles` is omitted, copycat defaults to two workers per controller. You can also override the value at
+runtime via the `MAX_CONCURRENT_RECONCILES` environment variable.
 
 ### Configuring registry credentials
 
