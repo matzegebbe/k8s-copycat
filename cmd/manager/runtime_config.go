@@ -31,13 +31,14 @@ func loadConfigFile() (config.Config, bool, error) {
 
 // runtimeConfig holds all runtime configuration derived from flags, env vars and the config file.
 type runtimeConfig struct {
-	AllowedNS      []string
-	SkipCfg        controllers.SkipConfig
-	Target         registry.Target
-	DryRun         bool
-	PathMap        []util.PathMapping
-	RequestTimeout time.Duration
-	Keychain       authn.Keychain
+	AllowedNS       []string
+	SkipCfg         controllers.SkipConfig
+	Target          registry.Target
+	DryRun          bool
+	PathMap         []util.PathMapping
+	RequestTimeout  time.Duration
+	Keychain        authn.Keychain
+	FailureCooldown time.Duration
 }
 
 const defaultRequestTimeout = 2 * time.Minute
@@ -157,17 +158,37 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		timeout = parsed
 	}
 
+	cooldownMinutes := strings.TrimSpace(os.Getenv("FAILURE_COOLDOWN_MINUTES"))
+	failureCooldown := mirror.DefaultFailureCooldown
+	if cooldownMinutes != "" {
+		minutes, parseErr := strconv.Atoi(cooldownMinutes)
+		if parseErr != nil {
+			return runtimeConfig{}, fmt.Errorf("parse failure cooldown minutes: %w", parseErr)
+		}
+		failureCooldown = cooldownFromMinutes(minutes)
+	} else if fileCfg.FailureCooldownMinutes != nil {
+		failureCooldown = cooldownFromMinutes(*fileCfg.FailureCooldownMinutes)
+	}
+
 	keychain := buildKeychainFromConfig(fileCfg.RegistryCredentials)
 
 	return runtimeConfig{
-		AllowedNS:      allowedNS,
-		SkipCfg:        skipCfg,
-		Target:         t,
-		DryRun:         dryRun,
-		PathMap:        fileCfg.PathMap,
-		RequestTimeout: timeout,
-		Keychain:       keychain,
+		AllowedNS:       allowedNS,
+		SkipCfg:         skipCfg,
+		Target:          t,
+		DryRun:          dryRun,
+		PathMap:         fileCfg.PathMap,
+		RequestTimeout:  timeout,
+		Keychain:        keychain,
+		FailureCooldown: failureCooldown,
 	}, nil
+}
+
+func cooldownFromMinutes(minutes int) time.Duration {
+	if minutes <= 0 {
+		return 0
+	}
+	return time.Duration(minutes) * time.Minute
 }
 
 func resolveAllowedNamespaces(envVal string, configValues []string) []string {
@@ -187,9 +208,21 @@ func resolveList(envVal string, configValues []string) []string {
 func sanitizeStringList(values []string) []string {
 	out := make([]string, 0, len(values))
 	for _, val := range values {
-		if trimmed := strings.TrimSpace(val); trimmed != "" {
-			out = append(out, trimmed)
+		trimmed := strings.TrimSpace(val)
+		if trimmed == "" {
+			continue
 		}
+		if strings.Contains(trimmed, ",") {
+			parts := strings.Split(trimmed, ",")
+			for _, part := range parts {
+				partTrimmed := strings.TrimSpace(part)
+				if partTrimmed != "" {
+					out = append(out, partTrimmed)
+				}
+			}
+			continue
+		}
+		out = append(out, trimmed)
 	}
 	return out
 }

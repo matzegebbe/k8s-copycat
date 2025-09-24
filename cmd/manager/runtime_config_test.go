@@ -41,4 +41,9 @@ func TestResolveList(t *testing.T) {
 	if !reflect.DeepEqual(got, []string{"delta"}) {
 		t.Fatalf("expected sanitize to drop blanks, got %v", got)
 	}
+
+	got = resolveList("", []string{"foo, bar", "baz"})
+	if !reflect.DeepEqual(got, []string{"foo", "bar", "baz"}) {
+		t.Fatalf("expected comma-delimited config values to be split, got %v", got)
+	}
 }

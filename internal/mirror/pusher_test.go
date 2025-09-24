@@ -160,6 +160,33 @@ func TestFailureResultRecordsState(t *testing.T) {
 	}
 }
 
+func TestFailureResultWithoutCooldown(t *testing.T) {
+	now := time.Now()
+	target := "example.com/repo:tag"
+	p := &pusher{
+		pushed:          map[string]struct{}{target: {}},
+		failed:          make(map[string]time.Time),
+		failureCooldown: 0,
+		now: func() time.Time {
+			return now
+		},
+	}
+
+	err := p.failureResult(target, assertError("boom"))
+	if err == nil {
+		t.Fatalf("expected failure result to return error")
+	}
+	if _, ok := err.(*RetryError); ok {
+		t.Fatalf("expected plain error when cooldown disabled, got RetryError")
+	}
+	if _, exists := p.pushed[target]; exists {
+		t.Fatalf("expected target to be removed from pushed set")
+	}
+	if _, recorded := p.failed[target]; recorded {
+		t.Fatalf("expected failure state not to be recorded when cooldown disabled")
+	}
+}
+
 type assertError string
 
 func (a assertError) Error() string { return string(a) }
