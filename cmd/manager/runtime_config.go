@@ -31,17 +31,19 @@ func loadConfigFile() (config.Config, bool, error) {
 
 // runtimeConfig holds all runtime configuration derived from flags, env vars and the config file.
 type runtimeConfig struct {
-	AllowedNS       []string
-	SkipCfg         controllers.SkipConfig
-	Target          registry.Target
-	DryRun          bool
-	PathMap         []util.PathMapping
-	RequestTimeout  time.Duration
-	Keychain        authn.Keychain
-	FailureCooldown time.Duration
+	AllowedNS               []string
+	SkipCfg                 controllers.SkipConfig
+	Target                  registry.Target
+	DryRun                  bool
+	PathMap                 []util.PathMapping
+	RequestTimeout          time.Duration
+	Keychain                authn.Keychain
+	FailureCooldown         time.Duration
+	MaxConcurrentReconciles int
 }
 
 const defaultRequestTimeout = 2 * time.Minute
+const defaultMaxConcurrentReconciles = 2
 
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
 func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Config, cfgFound bool) (runtimeConfig, error) {
@@ -172,15 +174,33 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 
 	keychain := buildKeychainFromConfig(fileCfg.RegistryCredentials)
 
+	maxConcurrent := defaultMaxConcurrentReconciles
+	if v := strings.TrimSpace(os.Getenv("MAX_CONCURRENT_RECONCILES")); v != "" {
+		parsed, parseErr := strconv.Atoi(v)
+		if parseErr != nil {
+			return runtimeConfig{}, fmt.Errorf("parse max concurrent reconciles: %w", parseErr)
+		}
+		if parsed <= 0 {
+			return runtimeConfig{}, fmt.Errorf("max concurrent reconciles must be greater than zero")
+		}
+		maxConcurrent = parsed
+	} else if fileCfg.MaxConcurrentReconciles != nil {
+		if *fileCfg.MaxConcurrentReconciles <= 0 {
+			return runtimeConfig{}, fmt.Errorf("maxConcurrentReconciles in config must be greater than zero")
+		}
+		maxConcurrent = *fileCfg.MaxConcurrentReconciles
+	}
+
 	return runtimeConfig{
-		AllowedNS:       allowedNS,
-		SkipCfg:         skipCfg,
-		Target:          t,
-		DryRun:          dryRun,
-		PathMap:         fileCfg.PathMap,
-		RequestTimeout:  timeout,
-		Keychain:        keychain,
-		FailureCooldown: failureCooldown,
+		AllowedNS:               allowedNS,
+		SkipCfg:                 skipCfg,
+		Target:                  t,
+		DryRun:                  dryRun,
+		PathMap:                 fileCfg.PathMap,
+		RequestTimeout:          timeout,
+		Keychain:                keychain,
+		FailureCooldown:         failureCooldown,
+		MaxConcurrentReconciles: maxConcurrent,
 	}, nil
 }
 

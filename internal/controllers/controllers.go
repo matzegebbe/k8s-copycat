@@ -22,7 +22,6 @@ import (
 )
 
 const (
-	maxConcurrent     = 2
 	defaultRetryDelay = 24 * time.Hour
 )
 
@@ -184,7 +183,7 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return r.processPodSpec(ctx, d.Namespace, d.Name, &d.Spec.Template.Spec)
 }
 
-func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&appsv1.Deployment{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
@@ -209,7 +208,7 @@ func (r *StatefulSetReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 	return r.processPodSpec(ctx, s.Namespace, s.Name, &s.Spec.Template.Spec)
 }
-func (r *StatefulSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *StatefulSetReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&appsv1.StatefulSet{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
@@ -234,7 +233,7 @@ func (r *JobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 	return r.processPodSpec(ctx, j.Namespace, j.Name, &j.Spec.Template.Spec)
 }
-func (r *JobReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *JobReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&batchv1.Job{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
@@ -259,7 +258,7 @@ func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	return r.processPodSpec(ctx, cj.Namespace, cj.Name, &cj.Spec.JobTemplate.Spec.Template.Spec)
 }
-func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&batchv1.CronJob{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
@@ -292,7 +291,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 	}
 	return ctrl.Result{}, nil
 }
-func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Pod{}).
 		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
@@ -370,7 +369,7 @@ func (r *PodReconciler) shouldSkipJobOwner(ctx context.Context, namespace, name 
 	return false, nil
 }
 
-func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCfg SkipConfig) error {
+func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCfg SkipConfig, maxConcurrent int) error {
 	base := baseReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -388,19 +387,22 @@ func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCf
 			base.SkippedNamespaces[trimmed] = struct{}{}
 		}
 	}
-	if err := (&DeploymentReconciler{base}).SetupWithManager(mgr); err != nil {
+	if maxConcurrent <= 0 {
+		maxConcurrent = 1
+	}
+	if err := (&DeploymentReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
 		return err
 	}
-	if err := (&StatefulSetReconciler{base}).SetupWithManager(mgr); err != nil {
+	if err := (&StatefulSetReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
 		return err
 	}
-	if err := (&JobReconciler{base}).SetupWithManager(mgr); err != nil {
+	if err := (&JobReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
 		return err
 	}
-	if err := (&CronJobReconciler{base}).SetupWithManager(mgr); err != nil {
+	if err := (&CronJobReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
 		return err
 	}
-	if err := (&PodReconciler{base}).SetupWithManager(mgr); err != nil {
+	if err := (&PodReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
 		return err
 	}
 	return nil
