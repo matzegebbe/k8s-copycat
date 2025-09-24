@@ -14,6 +14,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	remotetransport "github.com/google/go-containerregistry/pkg/v1/remote/transport"
 
@@ -188,6 +189,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	}
 
 	log.V(1).Info("starting pull from source")
+	log.V(1).Info("pull progress update", "percentage", "0%")
 
 	pullCtx, cancelPull := p.operationContext(ctx)
 	defer cancelPull()
@@ -200,6 +202,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	metrics.RecordPullSuccess(src)
 
 	log.V(1).Info("finished pulling image from source")
+	log.V(1).Info("pull progress update", "percentage", "100%")
 
 	srcDigest, err := img.Digest()
 	if err != nil {
@@ -250,15 +253,81 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return nil
 	}
 	log.Info("pushing image to target")
+	log.V(1).Info("push progress update", "percentage", "0%")
+
 	pushCtx, cancelPush := p.operationContext(ctx)
-	err = remote.Write(targetRef, img, remote.WithAuth(auth), remote.WithContext(pushCtx), remote.WithTransport(transport(p.target.Insecure())))
+	updates := make(chan v1.Update, 16)
+	var progressWG sync.WaitGroup
+	progressWG.Add(1)
+	go func() {
+		defer progressWG.Done()
+		logProgressUpdates(log, "push", updates)
+	}()
+
+	err = remote.Write(
+		targetRef,
+		img,
+		remote.WithAuth(auth),
+		remote.WithContext(pushCtx),
+		remote.WithTransport(transport(p.target.Insecure())),
+		remote.WithProgress(updates),
+	)
 	cancelPush()
+	progressWG.Wait()
 	if err != nil {
 		return p.failureResult(target, fmt.Errorf("push %s: %w", target, err))
 	}
 	log.Info("finished pushing image")
 	metrics.RecordPushSuccess(target)
 	return nil
+}
+
+func logProgressUpdates(log logr.Logger, operation string, updates <-chan v1.Update) {
+	const step = 10.0
+
+	nextThreshold := step
+	loggedFinal := false
+	failed := false
+
+	for update := range updates {
+		if update.Error != nil {
+			failed = true
+			log.Error(update.Error, fmt.Sprintf("%s progress error", operation))
+			continue
+		}
+
+		if update.Total <= 0 {
+			continue
+		}
+
+		percent := (float64(update.Complete) / float64(update.Total)) * 100
+		for percent >= nextThreshold && nextThreshold < 100 {
+			log.V(1).Info(
+				fmt.Sprintf("%s progress update", operation),
+				"percentage", fmt.Sprintf("%.0f%%", nextThreshold),
+				"completeBytes", update.Complete,
+				"totalBytes", update.Total,
+			)
+			nextThreshold += step
+		}
+
+		if percent >= 100 && !loggedFinal {
+			log.V(1).Info(
+				fmt.Sprintf("%s progress update", operation),
+				"percentage", "100%",
+				"completeBytes", update.Complete,
+				"totalBytes", update.Total,
+			)
+			loggedFinal = true
+		}
+	}
+
+	if !failed && !loggedFinal {
+		log.V(1).Info(
+			fmt.Sprintf("%s progress update", operation),
+			"percentage", "100%",
+		)
+	}
 }
 
 func (p *pusher) DryRun() bool {
