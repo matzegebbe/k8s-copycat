@@ -7,7 +7,7 @@ Do **not** use it in production environments.
 
 ![k8s-copycat logo](k8s-copycat-logo.png)
 
-k8s-copycat monitors your cluster’s **Deployments**, **StatefulSets**, **Jobs**, **CronJobs**, and **Pods** to mirror their container images into **AWS ECR** or any other Docker-compatible registry, with optional namespace filtering via `INCLUDE_NAMESPACES` when you need to scope the sync.
+k8s-copycat monitors your cluster’s **Deployments**, **StatefulSets**, **DaemonSets**, **Jobs**, **CronJobs**, and **Pods** to mirror their container images into **AWS ECR** or any other Docker-compatible registry. Tune the behavior with namespace allow/deny lists, workload skip lists, repo prefix templating, and more so the sync fits your environment.
 
 ## Why Does This Project Exist?
 
