@@ -27,6 +27,7 @@ import (
 type Pusher interface {
 	Mirror(ctx context.Context, sourceImage string, meta Metadata) error
 	DryRun() bool
+	ResetCooldown() (cleared int, cooldownEnabled bool)
 }
 
 // Metadata captures contextual information about the image being mirrored.
@@ -332,6 +333,26 @@ func logProgressUpdates(log logr.Logger, operation string, updates <-chan v1.Upd
 
 func (p *pusher) DryRun() bool {
 	return p.dryRun
+}
+
+func (p *pusher) ResetCooldown() (int, bool) {
+	if p.failureCooldown <= 0 {
+		return 0, false
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	cleared := len(p.failed)
+	if cleared == 0 {
+		return 0, true
+	}
+
+	for target := range p.failed {
+		delete(p.failed, target)
+	}
+
+	return cleared, true
 }
 
 func (p *pusher) operationContext(ctx context.Context) (context.Context, context.CancelFunc) {
