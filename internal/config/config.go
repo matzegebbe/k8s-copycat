@@ -49,6 +49,7 @@ type Config struct {
 	IncludeNamespaces       []string             `yaml:"includeNamespaces"`
 	SkipNamespaces          []string             `yaml:"skipNamespaces"`
 	SkipNames               ResourceSkipNames    `yaml:"skipNames"`
+	WatchResources          []string             `yaml:"watchResources"`
 	DryRun                  bool                 `yaml:"dryRun"`
 	RequestTimeoutSeconds   *int                 `yaml:"requestTimeout"`
 	FailureCooldownMinutes  *int                 `yaml:"failureCooldownMinutes"`
@@ -61,6 +62,7 @@ type Config struct {
 type ResourceSkipNames struct {
 	Deployments  []string `yaml:"deployments"`
 	StatefulSets []string `yaml:"statefulSets"`
+	DaemonSets   []string `yaml:"daemonSets"`
 	Jobs         []string `yaml:"jobs"`
 	CronJobs     []string `yaml:"cronJobs"`
 	Pods         []string `yaml:"pods"`
