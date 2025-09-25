@@ -197,6 +197,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	img, err := remote.Image(srcRef, remote.WithContext(pullCtx), remote.WithAuthFromKeychain(p.keychain), remote.WithTransport(transport(p.target.Insecure())))
 	if err != nil {
+		logRegistryAuthError(log, err, "pull")
 		return p.failureResult(target, fmt.Errorf("pull %s: %w", src, err))
 	}
 
