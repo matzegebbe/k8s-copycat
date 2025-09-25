@@ -50,7 +50,7 @@ type Config struct {
 	SkipNamespaces          []string             `yaml:"skipNamespaces"`
 	SkipNames               ResourceSkipNames    `yaml:"skipNames"`
 	DryRun                  bool                 `yaml:"dryRun"`
-	RequestTimeout          string               `yaml:"requestTimeout"`
+	RequestTimeoutSeconds   *int                 `yaml:"requestTimeout"`
 	FailureCooldownMinutes  *int                 `yaml:"failureCooldownMinutes"`
 	MaxConcurrentReconciles *int                 `yaml:"maxConcurrentReconciles"`
 	RegistryCredentials     []RegistryCredential `yaml:"registryCredentials"`

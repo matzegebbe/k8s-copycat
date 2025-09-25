@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"net/http"
 	"os"
 	"strings"
 
@@ -11,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -76,26 +78,48 @@ func main() {
 		os.Exit(1)
 	}
 
+	cooldownHTTPHandler := newCooldownHandler(logger.WithName("cooldown"))
+
+	restCfg := ctrl.GetConfigOrDie()
+	kubeClient, err := kubernetes.NewForConfig(restCfg)
+	if err != nil {
+		logger.Error(err, "create kubernetes client failed 🙀")
+		os.Exit(1)
+	}
+
+	expandedNS, err := validateAndExpandNamespaces(ctx, logger.WithName("namespaces"), kubeClient, cfg.AllowedNS)
+	if err != nil {
+		logger.Error(err, "validate configured namespaces failed 🙀")
+		os.Exit(1)
+	}
+	cfg.AllowedNS = expandedNS
+
 	mgrOpts := ctrl.Options{
-		Scheme:                 scheme,
-		Metrics:                server.Options{BindAddress: metricsAddr},
+		Scheme: scheme,
+		Metrics: server.Options{
+			BindAddress:   metricsAddr,
+			ExtraHandlers: map[string]http.Handler{"/reset-cooldown": cooldownHTTPHandler},
+		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "k8s-copycat.k8s-copycat",
 	}
-	if len(cfg.AllowedNS) == 1 && cfg.AllowedNS[0] == "*" {
+	switch {
+	case len(cfg.AllowedNS) == 0:
+		logger.Info("no namespaces matched include configuration; controllers will not watch any namespaces")
+	case len(cfg.AllowedNS) == 1 && cfg.AllowedNS[0] == "*":
 		logger.Info("listing resources in all namespaces")
-	} else {
+	default:
 		logger.Info("listing resources in configured namespaces", "namespaces", cfg.AllowedNS)
 	}
-	if len(cfg.AllowedNS) != 1 || cfg.AllowedNS[0] != "*" {
+	if len(cfg.AllowedNS) != 0 && (len(cfg.AllowedNS) != 1 || cfg.AllowedNS[0] != "*") {
 		nsMap := make(map[string]cache.Config, len(cfg.AllowedNS))
 		for _, ns := range cfg.AllowedNS {
 			nsMap[ns] = cache.Config{}
 		}
 		mgrOpts.Cache = cache.Options{DefaultNamespaces: nsMap}
 	}
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), mgrOpts)
+	mgr, err := ctrl.NewManager(restCfg, mgrOpts)
 	if err != nil {
 		logger.Error(err, "unable to start copycat 🙀")
 		os.Exit(1)
@@ -103,6 +127,7 @@ func main() {
 
 	transformer := util.NewRepoPathTransformer(cfg.PathMap)
 	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, transformer, logger.WithName("mirror"), cfg.Keychain, cfg.RequestTimeout, cfg.FailureCooldown)
+	cooldownHTTPHandler.SetResetter(pusher)
 	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg, cfg.MaxConcurrentReconciles); err != nil {
 		logger.Error(err, "setup controllers failed 🙀")
 		os.Exit(1)

@@ -147,17 +147,24 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		dryRun = dryRunFlag || fileCfg.DryRun
 	}
 
-	timeoutVal := strings.TrimSpace(os.Getenv("REGISTRY_REQUEST_TIMEOUT"))
-	if timeoutVal == "" {
-		timeoutVal = strings.TrimSpace(fileCfg.RequestTimeout)
-	}
+	timeoutSeconds := strings.TrimSpace(os.Getenv("REGISTRY_REQUEST_TIMEOUT"))
 	timeout := defaultRequestTimeout
-	if timeoutVal != "" {
-		parsed, parseErr := time.ParseDuration(timeoutVal)
+	if timeoutSeconds != "" {
+		parsed, parseErr := strconv.Atoi(timeoutSeconds)
 		if parseErr != nil {
 			return runtimeConfig{}, fmt.Errorf("parse registry request timeout: %w", parseErr)
 		}
-		timeout = parsed
+		if parsed <= 0 {
+			timeout = 0
+		} else {
+			timeout = time.Duration(parsed) * time.Second
+		}
+	} else if fileCfg.RequestTimeoutSeconds != nil {
+		if *fileCfg.RequestTimeoutSeconds <= 0 {
+			timeout = 0
+		} else {
+			timeout = time.Duration(*fileCfg.RequestTimeoutSeconds) * time.Second
+		}
 	}
 
 	cooldownMinutes := strings.TrimSpace(os.Getenv("FAILURE_COOLDOWN_MINUTES"))

@@ -187,6 +187,46 @@ func TestFailureResultWithoutCooldown(t *testing.T) {
 	}
 }
 
+func TestResetCooldown(t *testing.T) {
+	target := "example.com/repo:tag"
+	now := time.Now()
+	p := &pusher{
+		failureCooldown: time.Hour,
+		failed: map[string]time.Time{
+			target:                     now,
+			"example.com/other:latest": now.Add(-time.Minute),
+		},
+	}
+
+	cleared, enabled := p.ResetCooldown()
+	if !enabled {
+		t.Fatalf("expected cooldown to be reported as enabled")
+	}
+	if cleared != 2 {
+		t.Fatalf("expected 2 cleared entries, got %d", cleared)
+	}
+	if len(p.failed) != 0 {
+		t.Fatalf("expected failure map to be empty, got %d entries", len(p.failed))
+	}
+
+	cleared, enabled = p.ResetCooldown()
+	if !enabled {
+		t.Fatalf("expected cooldown to remain enabled")
+	}
+	if cleared != 0 {
+		t.Fatalf("expected zero cleared entries on second reset, got %d", cleared)
+	}
+
+	p.failureCooldown = 0
+	cleared, enabled = p.ResetCooldown()
+	if enabled {
+		t.Fatalf("expected cooldown to be reported as disabled")
+	}
+	if cleared != 0 {
+		t.Fatalf("expected zero cleared entries when cooldown disabled, got %d", cleared)
+	}
+}
+
 type assertError string
 
 func (a assertError) Error() string { return string(a) }

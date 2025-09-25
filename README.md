@@ -38,7 +38,7 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `INCLUDE_NAMESPACES`: `*` or comma-separated list (e.g., `default,prod`)
 - `SKIP_NAMESPACES`: comma-separated namespaces that should be ignored entirely
 - `SKIP_DEPLOYMENTS`, `SKIP_STATEFULSETS`, `SKIP_JOBS`, `SKIP_CRONJOBS`, `SKIP_PODS`: comma-separated workload names to ignore
-- `REGISTRY_REQUEST_TIMEOUT`: override the timeout for individual pull/push operations (default `2m`)
+- `REGISTRY_REQUEST_TIMEOUT`: override the timeout (in seconds) for individual pull/push operations (default `120`)
 - `FAILURE_COOLDOWN_MINUTES`: minutes to wait before retrying a failed mirror operation (default `1440`, set to `0` to disable)
 - `METRICS_ADDR`: bind address for the Prometheus metrics endpoint (default `:8080`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
@@ -110,7 +110,7 @@ useful for authenticating against Docker Hub or other registries even when
 mirroring into a different target such as ECR.
 
 ```yaml
-requestTimeout: 2m
+requestTimeout: 120          # seconds; set to 0 to disable per-request deadlines
 failureCooldownMinutes: 60   # retry failed pushes after one hour; set to 0 to disable the cooldown
 registryCredentials:
   - registry: registry-1.docker.io
@@ -119,6 +119,8 @@ registryCredentials:
   - registry: ghcr.io
     tokenEnv: GHCR_TOKEN
 ```
+
+`requestTimeout` limits how long copycat waits for each registry pull and push. When the timeout elapses, the current operation is aborted so the controller can retry later. Setting the value to `0` (or omitting it) disables the per-request deadline and lets copycat rely on the underlying client timeouts.
 
 When `failureCooldownMinutes` is set to `0`, copycat retries failed pushes immediately without recording cooldown state. Omit the field to use the default of 24 hours.
 
