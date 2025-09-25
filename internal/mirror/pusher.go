@@ -198,6 +198,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	img, err := remote.Image(srcRef, remote.WithContext(pullCtx), remote.WithAuthFromKeychain(p.keychain), remote.WithTransport(transport(p.target.Insecure())))
 	if err != nil {
 		logRegistryAuthError(log, err, "pull")
+		metrics.RecordPullError(src)
 		return p.failureResult(target, fmt.Errorf("pull %s: %w", src, err))
 	}
 
@@ -208,6 +209,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	srcDigest, err := img.Digest()
 	if err != nil {
+		metrics.RecordPullError(src)
 		return p.failureResult(target, fmt.Errorf("digest %s: %w", src, err))
 	}
 
@@ -215,6 +217,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	username, password, err := p.target.BasicAuth(ctx)
 	if err != nil {
+		metrics.RecordPushError(target)
 		return p.failureResult(target, fmt.Errorf("auth: %w", err))
 	}
 
@@ -244,10 +247,12 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		// continue to push
 	} else if headErr != nil {
 		logRegistryAuthError(log, headErr, "target existence check")
+		metrics.RecordPushError(target)
 		return p.failureResult(target, fmt.Errorf("check %s: %w", target, headErr))
 	}
 
 	if err := p.target.EnsureRepository(ctx, repo); err != nil {
+		metrics.RecordPushError(target)
 		return p.failureResult(target, fmt.Errorf("ensure repo %s: %w", repo, err))
 	}
 
@@ -279,6 +284,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	progressWG.Wait()
 	if err != nil {
 		logRegistryAuthError(log, err, "push")
+		metrics.RecordPushError(target)
 		return p.failureResult(target, fmt.Errorf("push %s: %w", target, err))
 	}
 	log.Info("finished pushing image")
