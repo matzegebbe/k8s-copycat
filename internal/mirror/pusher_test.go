@@ -2,10 +2,12 @@ package mirror
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/go-logr/logr/testr"
+	remotetransport "github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
 
@@ -230,3 +232,42 @@ func TestResetCooldown(t *testing.T) {
 type assertError string
 
 func (a assertError) Error() string { return string(a) }
+
+func TestDetectRegistryAuthErrorByStatus(t *testing.T) {
+	transportErr := &remotetransport.Error{StatusCode: http.StatusUnauthorized}
+
+	info, ok := detectRegistryAuthError(transportErr)
+	if !ok {
+		t.Fatalf("expected registry auth error to be detected")
+	}
+	if info.statusCode != http.StatusUnauthorized {
+		t.Fatalf("unexpected status code: %d", info.statusCode)
+	}
+	if len(info.diagnostics) != 0 {
+		t.Fatalf("expected no diagnostics, got %v", info.diagnostics)
+	}
+}
+
+func TestDetectRegistryAuthErrorByDiagnostic(t *testing.T) {
+	transportErr := &remotetransport.Error{
+		StatusCode: http.StatusBadRequest,
+		Errors: []remotetransport.Diagnostic{
+			{Code: remotetransport.UnauthorizedErrorCode, Message: "authentication required"},
+		},
+	}
+
+	info, ok := detectRegistryAuthError(transportErr)
+	if !ok {
+		t.Fatalf("expected registry auth error to be detected")
+	}
+	if info.statusCode != http.StatusBadRequest {
+		t.Fatalf("unexpected status code: %d", info.statusCode)
+	}
+	if len(info.diagnostics) != 1 {
+		t.Fatalf("expected a single diagnostic entry, got %d", len(info.diagnostics))
+	}
+	want := "UNAUTHORIZED: authentication required"
+	if info.diagnostics[0] != want {
+		t.Fatalf("unexpected diagnostic: %q", info.diagnostics[0])
+	}
+}

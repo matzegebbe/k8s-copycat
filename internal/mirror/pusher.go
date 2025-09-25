@@ -197,6 +197,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	img, err := remote.Image(srcRef, remote.WithContext(pullCtx), remote.WithAuthFromKeychain(p.keychain), remote.WithTransport(transport(p.target.Insecure())))
 	if err != nil {
+		logRegistryAuthError(log, err, "pull")
 		return p.failureResult(target, fmt.Errorf("pull %s: %w", src, err))
 	}
 
@@ -242,6 +243,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	} else if te, ok := headErr.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
 		// continue to push
 	} else if headErr != nil {
+		logRegistryAuthError(log, headErr, "target existence check")
 		return p.failureResult(target, fmt.Errorf("check %s: %w", target, headErr))
 	}
 
@@ -276,6 +278,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	cancelPush()
 	progressWG.Wait()
 	if err != nil {
+		logRegistryAuthError(log, err, "push")
 		return p.failureResult(target, fmt.Errorf("push %s: %w", target, err))
 	}
 	log.Info("finished pushing image")
@@ -329,6 +332,53 @@ func logProgressUpdates(log logr.Logger, operation string, updates <-chan v1.Upd
 			"percentage", "100%",
 		)
 	}
+}
+
+type registryAuthError struct {
+	statusCode  int
+	diagnostics []string
+}
+
+func logRegistryAuthError(log logr.Logger, err error, phase string) {
+	if info, ok := detectRegistryAuthError(err); ok {
+		msg := fmt.Sprintf("authentication to target registry failed during %s", phase)
+		fields := []any{"statusCode", info.statusCode}
+		if len(info.diagnostics) > 0 {
+			fields = append(fields, "details", info.diagnostics)
+		}
+		log.Error(err, msg, fields...)
+	}
+}
+
+func detectRegistryAuthError(err error) (*registryAuthError, bool) {
+	var transportErr *remotetransport.Error
+	if !errors.As(err, &transportErr) {
+		return nil, false
+	}
+
+	if !isRegistryAuthStatus(transportErr.StatusCode) && !hasRegistryAuthDiagnostic(transportErr.Errors) {
+		return nil, false
+	}
+
+	diagnostics := make([]string, 0, len(transportErr.Errors))
+	for _, diag := range transportErr.Errors {
+		diagnostics = append(diagnostics, diag.String())
+	}
+
+	return &registryAuthError{statusCode: transportErr.StatusCode, diagnostics: diagnostics}, true
+}
+
+func isRegistryAuthStatus(status int) bool {
+	return status == http.StatusUnauthorized || status == http.StatusForbidden
+}
+
+func hasRegistryAuthDiagnostic(diags []remotetransport.Diagnostic) bool {
+	for _, diag := range diags {
+		if diag.Code == remotetransport.UnauthorizedErrorCode || diag.Code == remotetransport.DeniedErrorCode {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *pusher) DryRun() bool {
