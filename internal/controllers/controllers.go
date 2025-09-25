@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -30,9 +31,67 @@ type SkipConfig struct {
 	Namespaces   []string
 	Deployments  []string
 	StatefulSets []string
+	DaemonSets   []string
 	Jobs         []string
 	CronJobs     []string
 	Pods         []string
+}
+
+// ResourceType describes a Kubernetes resource that can be watched by copycat.
+type ResourceType string
+
+const (
+	ResourceDeployments  ResourceType = "deployments"
+	ResourceStatefulSets ResourceType = "statefulsets"
+	ResourceDaemonSets   ResourceType = "daemonsets"
+	ResourceJobs         ResourceType = "jobs"
+	ResourceCronJobs     ResourceType = "cronjobs"
+	ResourcePods         ResourceType = "pods"
+)
+
+var supportedResourceTypes = map[string]ResourceType{
+	"deployments":  ResourceDeployments,
+	"statefulsets": ResourceStatefulSets,
+	"daemonsets":   ResourceDaemonSets,
+	"jobs":         ResourceJobs,
+	"cronjobs":     ResourceCronJobs,
+	"pods":         ResourcePods,
+}
+
+// AllResourceTypes returns every supported resource type in deterministic order.
+func AllResourceTypes() []ResourceType {
+	return []ResourceType{
+		ResourceDeployments,
+		ResourceStatefulSets,
+		ResourceDaemonSets,
+		ResourceJobs,
+		ResourceCronJobs,
+		ResourcePods,
+	}
+}
+
+// ParseWatchResources converts raw resource strings to ResourceType values while reporting unsupported entries.
+func ParseWatchResources(values []string) ([]ResourceType, []string) {
+	seen := make(map[ResourceType]struct{}, len(values))
+	parsed := make([]ResourceType, 0, len(values))
+	invalid := make([]string, 0)
+	for _, raw := range values {
+		trimmed := strings.ToLower(strings.TrimSpace(raw))
+		if trimmed == "" {
+			continue
+		}
+		typ, ok := supportedResourceTypes[trimmed]
+		if !ok {
+			invalid = append(invalid, raw)
+			continue
+		}
+		if _, dup := seen[typ]; dup {
+			continue
+		}
+		seen[typ] = struct{}{}
+		parsed = append(parsed, typ)
+	}
+	return parsed, invalid
 }
 
 type nameMatcher struct {
@@ -105,6 +164,7 @@ type baseReconciler struct {
 	SkippedNamespaces map[string]struct{}
 	SkipDeployments   nameMatcher
 	SkipStatefulSets  nameMatcher
+	SkipDaemonSets    nameMatcher
 	SkipJobs          nameMatcher
 	SkipCronJobs      nameMatcher
 	SkipPods          nameMatcher
@@ -216,6 +276,32 @@ func (r *StatefulSetReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent
 		Complete(r)
 }
 
+type DaemonSetReconciler struct{ baseReconciler }
+
+func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	if !r.nsAllowed(req.Namespace) {
+		return ctrl.Result{}, nil
+	}
+	if r.SkipDaemonSets.matches(req.Namespace, req.Name) {
+		return ctrl.Result{}, nil
+	}
+	log := ctrl.LoggerFrom(ctx)
+	log.V(1).Info("saw DaemonSet", "name", req.Name, "namespace", req.Namespace)
+	var ds appsv1.DaemonSet
+	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &ds); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	return r.processPodSpec(ctx, ds.Namespace, ds.Name, &ds.Spec.Template.Spec)
+}
+
+func (r *DaemonSetReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&appsv1.DaemonSet{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
+		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		Complete(r)
+}
+
 type JobReconciler struct{ baseReconciler }
 
 func (r *JobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -321,6 +407,10 @@ func (r *PodReconciler) shouldSkipPod(ctx context.Context, pod *corev1.Pod) (boo
 			if r.SkipStatefulSets.matches(pod.Namespace, owner.Name) {
 				return true, nil
 			}
+		case "DaemonSet":
+			if r.SkipDaemonSets.matches(pod.Namespace, owner.Name) {
+				return true, nil
+			}
 		case "Job":
 			skip, err := r.shouldSkipJobOwner(ctx, pod.Namespace, owner.Name)
 			if err != nil {
@@ -369,7 +459,7 @@ func (r *PodReconciler) shouldSkipJobOwner(ctx context.Context, namespace, name 
 	return false, nil
 }
 
-func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCfg SkipConfig, maxConcurrent int) error {
+func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCfg SkipConfig, watch []ResourceType, maxConcurrent int) error {
 	base := baseReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -378,6 +468,7 @@ func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCf
 		SkippedNamespaces: make(map[string]struct{}, len(skipCfg.Namespaces)),
 		SkipDeployments:   newNameMatcher(skipCfg.Deployments),
 		SkipStatefulSets:  newNameMatcher(skipCfg.StatefulSets),
+		SkipDaemonSets:    newNameMatcher(skipCfg.DaemonSets),
 		SkipJobs:          newNameMatcher(skipCfg.Jobs),
 		SkipCronJobs:      newNameMatcher(skipCfg.CronJobs),
 		SkipPods:          newNameMatcher(skipCfg.Pods),
@@ -390,20 +481,39 @@ func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCf
 	if maxConcurrent <= 0 {
 		maxConcurrent = 1
 	}
-	if err := (&DeploymentReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-		return err
+	if len(watch) == 0 {
+		watch = AllResourceTypes()
 	}
-	if err := (&StatefulSetReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-		return err
-	}
-	if err := (&JobReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-		return err
-	}
-	if err := (&CronJobReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-		return err
-	}
-	if err := (&PodReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-		return err
+	logger := ctrl.Log.WithName("controllers")
+	for _, res := range watch {
+		switch res {
+		case ResourceDeployments:
+			if err := (&DeploymentReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
+				return err
+			}
+		case ResourceStatefulSets:
+			if err := (&StatefulSetReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
+				return err
+			}
+		case ResourceDaemonSets:
+			if err := (&DaemonSetReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
+				return err
+			}
+		case ResourceJobs:
+			if err := (&JobReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
+				return err
+			}
+		case ResourceCronJobs:
+			if err := (&CronJobReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
+				return err
+			}
+		case ResourcePods:
+			if err := (&PodReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
+				return err
+			}
+		default:
+			logger.Error(fmt.Errorf("unsupported resource type"), "ignoring watch resource", "resource", res)
+		}
 	}
 	return nil
 }

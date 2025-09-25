@@ -40,6 +40,7 @@ type runtimeConfig struct {
 	Keychain                authn.Keychain
 	FailureCooldown         time.Duration
 	MaxConcurrentReconciles int
+	WatchResources          []controllers.ResourceType
 }
 
 const defaultRequestTimeout = 2 * time.Minute
@@ -52,9 +53,20 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		Namespaces:   resolveList(os.Getenv("SKIP_NAMESPACES"), fileCfg.SkipNamespaces),
 		Deployments:  resolveList(os.Getenv("SKIP_DEPLOYMENTS"), fileCfg.SkipNames.Deployments),
 		StatefulSets: resolveList(os.Getenv("SKIP_STATEFULSETS"), fileCfg.SkipNames.StatefulSets),
+		DaemonSets:   resolveList(os.Getenv("SKIP_DAEMONSETS"), fileCfg.SkipNames.DaemonSets),
 		Jobs:         resolveList(os.Getenv("SKIP_JOBS"), fileCfg.SkipNames.Jobs),
 		CronJobs:     resolveList(os.Getenv("SKIP_CRONJOBS"), fileCfg.SkipNames.CronJobs),
 		Pods:         resolveList(os.Getenv("SKIP_PODS"), fileCfg.SkipNames.Pods),
+	}
+
+	watchResources := resolveList(os.Getenv("WATCH_RESOURCES"), fileCfg.WatchResources)
+	var parsedWatch []controllers.ResourceType
+	if len(watchResources) > 0 {
+		var invalid []string
+		parsedWatch, invalid = controllers.ParseWatchResources(watchResources)
+		if len(invalid) > 0 {
+			return runtimeConfig{}, fmt.Errorf("unsupported watch resource(s): %s", strings.Join(invalid, ", "))
+		}
 	}
 
 	targetKind := os.Getenv("TARGET_KIND")
@@ -208,6 +220,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		Keychain:                keychain,
 		FailureCooldown:         failureCooldown,
 		MaxConcurrentReconciles: maxConcurrent,
+		WatchResources:          parsedWatch,
 	}, nil
 }
 

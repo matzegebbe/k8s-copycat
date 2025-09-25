@@ -37,11 +37,21 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD`, `TARGET_INSECURE` (for Docker)
 - `INCLUDE_NAMESPACES`: `*` or comma-separated list (e.g., `default,prod`)
 - `SKIP_NAMESPACES`: comma-separated namespaces that should be ignored entirely
-- `SKIP_DEPLOYMENTS`, `SKIP_STATEFULSETS`, `SKIP_JOBS`, `SKIP_CRONJOBS`, `SKIP_PODS`: comma-separated workload names to ignore
+- `SKIP_DEPLOYMENTS`, `SKIP_STATEFULSETS`, `SKIP_DAEMONSETS`, `SKIP_JOBS`, `SKIP_CRONJOBS`, `SKIP_PODS`: comma-separated workload names to ignore
+- `WATCH_RESOURCES`: comma-separated list of resource types to watch (default `deployments,statefulsets,daemonsets,jobs,cronjobs,pods`)
 - `REGISTRY_REQUEST_TIMEOUT`: override the timeout (in seconds) for individual pull/push operations (default `120`)
 - `FAILURE_COOLDOWN_MINUTES`: minutes to wait before retrying a failed mirror operation (default `1440`, set to `0` to disable)
 - `METRICS_ADDR`: bind address for the Prometheus metrics endpoint (default `:8080`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
+
+### Selecting watched workloads
+
+By default, k8s-copycat watches Deployments, StatefulSets, DaemonSets, Jobs,
+CronJobs, and stand-alone Pods. You can narrow the scope by providing
+`WATCH_RESOURCES` (environment variable) or `watchResources` in the config
+file. Supported values are `deployments`, `statefulsets`, `daemonsets`, `jobs`,
+`cronjobs`, and `pods` (case-insensitive). Any unsupported entries are rejected
+at startup so you can fix typos before the controller begins to run.
 
 ### Repository prefix templating
 
@@ -84,17 +94,28 @@ ecr:
 ### Example `config.yaml` Snippet
 
 ```yaml
+watchResources:
+  - deployments                # default: listen to all supported resource types
+  - statefulsets
+  - daemonsets
+  - jobs
+  - cronjobs
+  - pods
+skipNamespaces: []               # default: allow all namespaces
+skipNames:
+  deployments: []               # default: watch every Deployment
+  statefulSets: []              # default: watch every StatefulSet
+  daemonSets: []                # default: watch every DaemonSet
+  jobs: []                      # default: watch every Job
+  cronJobs: []                  # default: watch every CronJob
+  pods: []                      # default: watch every stand-alone Pod
+maxConcurrentReconciles: 2       # default: two workers per controller
 pathMap:
   - from: "group/project"
     to: "prod/project"
   - from: "^legacy/(.*)"
     to: "modern/$1"
     regex: true
-skipNamespaces: ["kube-system"]
-skipNames:
-  deployments: ["copycat"]
-  cronJobs: ["nightly"]
-maxConcurrentReconciles: 4
 ```
 
 Rules are evaluated in order, with the first matching entry applied. Leaving

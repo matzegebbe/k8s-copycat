@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -90,14 +91,16 @@ func TestPodReconcilerShouldSkip(t *testing.T) {
 		}},
 	}}
 	statefulSet := &appsv1.StatefulSet{ObjectMeta: metav1.ObjectMeta{Name: "db", Namespace: "default"}}
+	daemonSet := &appsv1.DaemonSet{ObjectMeta: metav1.ObjectMeta{Name: "node-agent", Namespace: "default"}}
 
 	podFromDeployment := podWithOwner("default", "copycat-abc-def", appsv1.SchemeGroupVersion.WithKind("ReplicaSet"), "copycat-abc")
 	podFromJob := podWithOwner("default", "nightly-123-xyz", batchv1.SchemeGroupVersion.WithKind("Job"), "nightly-123")
 	podFromStatefulSet := podWithOwner("default", "db-0", appsv1.SchemeGroupVersion.WithKind("StatefulSet"), "db")
+	podFromDaemonSet := podWithOwner("default", "node-agent-123", appsv1.SchemeGroupVersion.WithKind("DaemonSet"), "node-agent")
 	allowedPod := podWithOwner("default", "other-123", appsv1.SchemeGroupVersion.WithKind("ReplicaSet"), "other-123")
 
 	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(
-		deployment, replicaSet, cronJob, job, statefulSet,
+		deployment, replicaSet, cronJob, job, statefulSet, daemonSet,
 	).Build()
 
 	reconciler := PodReconciler{baseReconciler{
@@ -106,6 +109,7 @@ func TestPodReconcilerShouldSkip(t *testing.T) {
 		SkippedNamespaces: map[string]struct{}{},
 		SkipDeployments:   newNameMatcher([]string{"copycat"}),
 		SkipStatefulSets:  newNameMatcher([]string{"db"}),
+		SkipDaemonSets:    newNameMatcher([]string{"node-agent"}),
 		SkipJobs:          newNameMatcher(nil),
 		SkipCronJobs:      newNameMatcher([]string{"nightly"}),
 		SkipPods:          newNameMatcher(nil),
@@ -122,8 +126,32 @@ func TestPodReconcilerShouldSkip(t *testing.T) {
 	if skip, err := reconciler.shouldSkipPod(ctx, podFromStatefulSet); err != nil || !skip {
 		t.Fatalf("expected statefulset pod to be skipped, skip=%v err=%v", skip, err)
 	}
+	if skip, err := reconciler.shouldSkipPod(ctx, podFromDaemonSet); err != nil || !skip {
+		t.Fatalf("expected daemonset pod to be skipped, skip=%v err=%v", skip, err)
+	}
 	if skip, err := reconciler.shouldSkipPod(ctx, allowedPod); err != nil || skip {
 		t.Fatalf("expected unrelated pod not to be skipped, skip=%v err=%v", skip, err)
+	}
+}
+
+func TestParseWatchResources(t *testing.T) {
+	t.Parallel()
+
+	parsed, invalid := ParseWatchResources([]string{"Pods", "deployments", "pods", "DaemonSets"})
+	if len(invalid) != 0 {
+		t.Fatalf("expected no invalid entries, got %v", invalid)
+	}
+	expected := []ResourceType{ResourcePods, ResourceDeployments, ResourceDaemonSets}
+	if !reflect.DeepEqual(parsed, expected) {
+		t.Fatalf("unexpected parse result: %v", parsed)
+	}
+
+	parsed, invalid = ParseWatchResources([]string{"unknown", ""})
+	if len(parsed) != 0 {
+		t.Fatalf("expected no parsed entries for invalid input, got %v", parsed)
+	}
+	if !reflect.DeepEqual(invalid, []string{"unknown"}) {
+		t.Fatalf("unexpected invalid list: %v", invalid)
 	}
 }
 
