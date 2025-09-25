@@ -133,6 +133,7 @@ mirroring into a different target such as ECR.
 ```yaml
 requestTimeout: 120          # seconds; set to 0 to disable per-request deadlines
 failureCooldownMinutes: 60   # retry failed pushes after one hour; set to 0 to disable the cooldown
+forceReconcileMinutes: 30    # rescan all watched resources every 30 minutes; set to 0 to disable the periodic resync
 registryCredentials:
   - registry: registry-1.docker.io
     usernameEnv: DOCKERHUB_USERNAME
@@ -144,6 +145,8 @@ registryCredentials:
 `requestTimeout` limits how long copycat waits for each registry pull and push. When the timeout elapses, the current operation is aborted so the controller can retry later. Setting the value to `0` (or omitting it) disables the per-request deadline and lets copycat rely on the underlying client timeouts.
 
 When `failureCooldownMinutes` is set to `0`, copycat retries failed pushes immediately without recording cooldown state. Omit the field to use the default of 24 hours.
+
+`forceReconcileMinutes` triggers a periodic full resync for all watched resources, mirroring the behavior seen immediately after startup. This ensures every workload is re-evaluated on a fixed cadence so images are repushed even without new Kubernetes events.
 
 Credentials can be supplied directly in the configuration file via `username`,
 `password`, or `token`, but using environment variables (referenced through
@@ -188,20 +191,26 @@ scrape_configs:
 
 The service publishes the following counters labelled by the image name:
 
-- `app_registry_pull_success_total{image="<name>"}`
-- `app_registry_push_success_total{image="<name>"}`
+- `k8s_copycat_registry_pull_success_total{image="<name>"}`
+- `k8s_copycat_registry_pull_error_total{image="<name>"}`
+- `k8s_copycat_registry_push_success_total{image="<name>"}`
+- `k8s_copycat_registry_push_error_total{image="<name>"}`
 
 ### Example Queries
 
 ```promql
-sum by (image) (rate(app_registry_pull_success_total[5m]))
+sum by (image) (rate(k8s_copycat_registry_pull_success_total[5m]))
 ```
 
 ```promql
-sum(rate(app_registry_push_success_total[5m]))
+sum(rate(k8s_copycat_registry_push_success_total[5m]))
 ```
 
-These queries reveal the busiest images and the overall push throughput.
+```promql
+sum(rate(k8s_copycat_registry_push_error_total[5m]))
+```
+
+These queries reveal the busiest images, overall push throughput, and any spikes in failed pushes.
 
 ## Contributing
 

@@ -41,6 +41,7 @@ type runtimeConfig struct {
 	FailureCooldown         time.Duration
 	MaxConcurrentReconciles int
 	WatchResources          []controllers.ResourceType
+	ForceResync             time.Duration
 }
 
 const defaultRequestTimeout = 2 * time.Minute
@@ -186,9 +187,9 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		if parseErr != nil {
 			return runtimeConfig{}, fmt.Errorf("parse failure cooldown minutes: %w", parseErr)
 		}
-		failureCooldown = cooldownFromMinutes(minutes)
+		failureCooldown = durationFromMinutes(minutes)
 	} else if fileCfg.FailureCooldownMinutes != nil {
-		failureCooldown = cooldownFromMinutes(*fileCfg.FailureCooldownMinutes)
+		failureCooldown = durationFromMinutes(*fileCfg.FailureCooldownMinutes)
 	}
 
 	keychain := buildKeychainFromConfig(fileCfg.RegistryCredentials)
@@ -210,6 +211,18 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		maxConcurrent = *fileCfg.MaxConcurrentReconciles
 	}
 
+	forceResyncMinutes := strings.TrimSpace(os.Getenv("FORCE_RECONCILE_MINUTES"))
+	forceResync := time.Duration(0)
+	if forceResyncMinutes != "" {
+		minutes, parseErr := strconv.Atoi(forceResyncMinutes)
+		if parseErr != nil {
+			return runtimeConfig{}, fmt.Errorf("parse force reconcile minutes: %w", parseErr)
+		}
+		forceResync = durationFromMinutes(minutes)
+	} else if fileCfg.ForceReconcileMinutes != nil {
+		forceResync = durationFromMinutes(*fileCfg.ForceReconcileMinutes)
+	}
+
 	return runtimeConfig{
 		AllowedNS:               allowedNS,
 		SkipCfg:                 skipCfg,
@@ -221,10 +234,11 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		FailureCooldown:         failureCooldown,
 		MaxConcurrentReconciles: maxConcurrent,
 		WatchResources:          parsedWatch,
+		ForceResync:             forceResync,
 	}, nil
 }
 
-func cooldownFromMinutes(minutes int) time.Duration {
+func durationFromMinutes(minutes int) time.Duration {
 	if minutes <= 0 {
 		return 0
 	}

@@ -155,6 +155,7 @@ data:
     #   pods: ["custom-pod"]
     requestTimeout: 120      # seconds; set to 0 to disable per-request deadlines
     # failureCooldownMinutes: 1440   # retry failed pushes after one day; set to 0 to disable the cooldown
+    # forceReconcileMinutes: 60      # trigger a full resync every hour; set to 0 to disable the periodic resync
     #ecr:
     #  accountID: "123456789012"
     #  region: "eu-central-1"

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -104,6 +105,12 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "k8s-copycat.k8s-copycat",
 	}
+	var syncPeriodPtr *time.Duration
+	if cfg.ForceResync > 0 {
+		syncPeriod := cfg.ForceResync
+		syncPeriodPtr = &syncPeriod
+		logger.Info("configuring periodic full reconciliation", "interval", syncPeriod)
+	}
 	switch {
 	case len(cfg.AllowedNS) == 0:
 		logger.Info("no namespaces matched include configuration; controllers will not watch any namespaces")
@@ -112,13 +119,15 @@ func main() {
 	default:
 		logger.Info("listing resources in configured namespaces", "namespaces", cfg.AllowedNS)
 	}
+	cacheOpts := cache.Options{SyncPeriod: syncPeriodPtr}
 	if len(cfg.AllowedNS) != 0 && (len(cfg.AllowedNS) != 1 || cfg.AllowedNS[0] != "*") {
 		nsMap := make(map[string]cache.Config, len(cfg.AllowedNS))
 		for _, ns := range cfg.AllowedNS {
 			nsMap[ns] = cache.Config{}
 		}
-		mgrOpts.Cache = cache.Options{DefaultNamespaces: nsMap}
+		cacheOpts.DefaultNamespaces = nsMap
 	}
+	mgrOpts.Cache = cacheOpts
 	mgr, err := ctrl.NewManager(restCfg, mgrOpts)
 	if err != nil {
 		logger.Error(err, "unable to start copycat 🙀")
