@@ -42,21 +42,23 @@ type RegistryCredential struct {
 }
 
 type Config struct {
-        TargetKind              string               `yaml:"targetKind"` // ecr | docker
-        LogLevel                string               `yaml:"logLevel"`
-        ECR                     ECR                  `yaml:"ecr"`
-        Docker                  Docker               `yaml:"docker"`
-        IncludeNamespaces       []string             `yaml:"includeNamespaces"`
-        SkipNamespaces          []string             `yaml:"skipNamespaces"`
-        SkipNames               ResourceSkipNames    `yaml:"skipNames"`
-        WatchResources          []string             `yaml:"watchResources"`
-        DryRun                  bool                 `yaml:"dryRun"`
-        RequestTimeoutSeconds   *int                 `yaml:"requestTimeout"`
-        FailureCooldownMinutes  *int                 `yaml:"failureCooldownMinutes"`
-        ForceReconcileMinutes   *int                 `yaml:"forceReconcileMinutes"`
-        MaxConcurrentReconciles *int                 `yaml:"maxConcurrentReconciles"`
-        RegistryCredentials     []RegistryCredential `yaml:"registryCredentials"`
-        PathMap                 []util.PathMapping   `yaml:"pathMap"`
+	TargetKind                 string               `yaml:"targetKind"` // ecr | docker
+	LogLevel                   string               `yaml:"logLevel"`
+	ECR                        ECR                  `yaml:"ecr"`
+	Docker                     Docker               `yaml:"docker"`
+	DigestPull                 bool                 `yaml:"digestPull"`
+	AllowDifferentDigestRepush *bool                `yaml:"allowDifferentDigestRepush"`
+	IncludeNamespaces          []string             `yaml:"includeNamespaces"`
+	SkipNamespaces             []string             `yaml:"skipNamespaces"`
+	SkipNames                  ResourceSkipNames    `yaml:"skipNames"`
+	WatchResources             []string             `yaml:"watchResources"`
+	DryRun                     bool                 `yaml:"dryRun"`
+	RequestTimeoutSeconds      *int                 `yaml:"requestTimeout"`
+	FailureCooldownMinutes     *int                 `yaml:"failureCooldownMinutes"`
+	ForceReconcileMinutes      *int                 `yaml:"forceReconcileMinutes"`
+	MaxConcurrentReconciles    *int                 `yaml:"maxConcurrentReconciles"`
+	RegistryCredentials        []RegistryCredential `yaml:"registryCredentials"`
+	PathMap                    []util.PathMapping   `yaml:"pathMap"`
 }
 
 // ResourceSkipNames declares resource names that should be ignored by copycat.

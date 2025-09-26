@@ -135,7 +135,17 @@ func main() {
 	}
 
 	transformer := util.NewRepoPathTransformer(cfg.PathMap)
-	pusher := mirror.NewPusher(cfg.Target, cfg.DryRun, transformer, logger.WithName("mirror"), cfg.Keychain, cfg.RequestTimeout, cfg.FailureCooldown)
+	pusher := mirror.NewPusher(
+		cfg.Target,
+		cfg.DryRun,
+		transformer,
+		logger.WithName("mirror"),
+		cfg.Keychain,
+		cfg.RequestTimeout,
+		cfg.FailureCooldown,
+		cfg.DigestPull,
+		cfg.AllowDifferentDigestRepush,
+	)
 	cooldownHTTPHandler.SetResetter(pusher)
 	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg, cfg.WatchResources, cfg.MaxConcurrentReconciles); err != nil {
 		logger.Error(err, "setup controllers failed 🙀")
