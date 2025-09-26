@@ -38,17 +38,19 @@ type Metadata struct {
 }
 
 type pusher struct {
-	target          registry.Target
-	dryRun          bool
-	transform       func(string) string
-	mu              sync.Mutex
-	pushed          map[string]struct{}
-	logger          logr.Logger
-	keychain        authn.Keychain
-	requestTimeout  time.Duration
-	failureCooldown time.Duration
-	failed          map[string]time.Time
-	now             func() time.Time
+	target                     registry.Target
+	dryRun                     bool
+	transform                  func(string) string
+	pullByDigest               bool
+	allowDifferentDigestRepush bool
+	mu                         sync.Mutex
+	pushed                     map[string]struct{}
+	logger                     logr.Logger
+	keychain                   authn.Keychain
+	requestTimeout             time.Duration
+	failureCooldown            time.Duration
+	failed                     map[string]time.Time
+	now                        func() time.Time
 }
 
 const DefaultFailureCooldown = 24 * time.Hour
@@ -74,7 +76,7 @@ func (e *RetryError) Unwrap() error {
 	return e.Cause
 }
 
-func NewPusher(t registry.Target, dryRun bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration) Pusher {
+func NewPusher(t registry.Target, dryRun bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, allowDifferentDigestRepush bool) Pusher {
 	if transform == nil {
 		transform = util.CleanRepoName
 	}
@@ -93,16 +95,18 @@ func NewPusher(t registry.Target, dryRun bool, transform func(string) string, lo
 		failureCooldown = DefaultFailureCooldown
 	}
 	return &pusher{
-		target:          t,
-		dryRun:          dryRun,
-		transform:       transform,
-		pushed:          make(map[string]struct{}),
-		logger:          logger,
-		keychain:        keychain,
-		requestTimeout:  requestTimeout,
-		failureCooldown: failureCooldown,
-		failed:          make(map[string]time.Time),
-		now:             time.Now,
+		target:                     t,
+		dryRun:                     dryRun,
+		transform:                  transform,
+		pullByDigest:               pullByDigest,
+		allowDifferentDigestRepush: allowDifferentDigestRepush,
+		pushed:                     make(map[string]struct{}),
+		logger:                     logger,
+		keychain:                   keychain,
+		requestTimeout:             requestTimeout,
+		failureCooldown:            failureCooldown,
+		failed:                     make(map[string]time.Time),
+		now:                        time.Now,
 	}
 }
 
@@ -150,6 +154,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	var target string
 	var targetRef name.Reference
+	pullRef := srcRef
 	opts := []name.Option{name.WeakValidation}
 	if p.target.Insecure() {
 		opts = append(opts, name.Insecure)
@@ -189,13 +194,33 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return nil
 	}
 
+	if p.pullByDigest {
+		if tagRef, ok := srcRef.(name.Tag); ok {
+			digestCtx, cancelDigest := p.operationContext(ctx)
+			sourceDesc, digestErr := remote.Get(tagRef, remote.WithContext(digestCtx), remote.WithAuthFromKeychain(p.keychain), remote.WithTransport(transport(p.target.Insecure())))
+			cancelDigest()
+			if digestErr != nil {
+				logRegistryAuthError(log, digestErr, "digest resolution")
+				metrics.RecordPullError(src)
+				return p.failureResult(target, fmt.Errorf("resolve digest %s: %w", src, digestErr))
+			}
+			digestRef, digestParseErr := name.NewDigest(fmt.Sprintf("%s@%s", tagRef.Context().Name(), sourceDesc.Digest.String()), name.WeakValidation)
+			if digestParseErr != nil {
+				metrics.RecordPullError(src)
+				return p.failureResult(target, fmt.Errorf("build digest reference %s: %w", src, digestParseErr))
+			}
+			log.V(1).Info("resolved tag digest", "digest", sourceDesc.Digest.String())
+			pullRef = digestRef
+		}
+	}
+
 	log.V(1).Info("starting pull from source")
 	log.V(1).Info("pull progress update", "percentage", "0%")
 
 	pullCtx, cancelPull := p.operationContext(ctx)
 	defer cancelPull()
 
-	img, err := remote.Image(srcRef, remote.WithContext(pullCtx), remote.WithAuthFromKeychain(p.keychain), remote.WithTransport(transport(p.target.Insecure())))
+	img, err := remote.Image(pullRef, remote.WithContext(pullCtx), remote.WithAuthFromKeychain(p.keychain), remote.WithTransport(transport(p.target.Insecure())))
 	if err != nil {
 		logRegistryAuthError(log, err, "pull")
 		metrics.RecordPullError(src)
@@ -242,7 +267,23 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			}
 			return nil
 		}
-		log.Info("image already present with different digest, updating", "currentDigest", desc.Digest.String(), "sourceDigest", srcDigest.String())
+
+		switch targetTag := targetRef.(type) {
+		case name.Tag:
+			tagStr := targetTag.TagStr()
+			if strings.EqualFold(tagStr, "latest") {
+				log.Info("image already present with different digest for latest tag, updating", "currentDigest", desc.Digest.String(), "sourceDigest", srcDigest.String())
+			} else if !p.allowDifferentDigestRepush {
+				err := fmt.Errorf("target image %s exists with digest %s, refusing to overwrite with source digest %s", target, desc.Digest.String(), srcDigest.String())
+				log.Error(err, "digest mismatch detected")
+				metrics.RecordPushError(target)
+				return p.failureResult(target, err)
+			} else {
+				log.Info("image already present with different digest, updating per configuration", "currentDigest", desc.Digest.String(), "sourceDigest", srcDigest.String())
+			}
+		default:
+			log.Info("image already present with different digest, updating", "currentDigest", desc.Digest.String(), "sourceDigest", srcDigest.String())
+		}
 	} else if te, ok := headErr.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
 		// continue to push
 	} else if headErr != nil {

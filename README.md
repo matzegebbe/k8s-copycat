@@ -41,6 +41,8 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `WATCH_RESOURCES`: comma-separated list of resource types to watch (default `deployments,statefulsets,daemonsets,jobs,cronjobs,pods`)
 - `REGISTRY_REQUEST_TIMEOUT`: override the timeout (in seconds) for individual pull/push operations (default `120`)
 - `FAILURE_COOLDOWN_MINUTES`: minutes to wait before retrying a failed mirror operation (default `1440`, set to `0` to disable)
+- `DIGEST_PULL`: when `true`, resolve tag references to their digest before pulling (default `false`)
+- `ALLOW_DIFFERENT_DIGEST_REPUSH`: when `true`, allow overwriting an existing tag that already exists with a different digest (default `true`, always ignored for the `latest` tag)
 - `METRICS_ADDR`: bind address for the Prometheus metrics endpoint (default `:8080`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
 
@@ -94,6 +96,8 @@ ecr:
 ### Example `config.yaml` Snippet
 
 ```yaml
+digestPull: true                  # resolve source tags to their immutable digest before pulling
+allowDifferentDigestRepush: false # optional: fail when the target tag already exists with a different digest (except for "latest")
 watchResources:
   - deployments                # default: listen to all supported resource types
   - statefulsets
@@ -147,6 +151,12 @@ registryCredentials:
 When `failureCooldownMinutes` is set to `0`, copycat retries failed pushes immediately without recording cooldown state. Omit the field to use the default of 24 hours.
 
 `forceReconcileMinutes` triggers a periodic full resync for all watched resources, mirroring the behavior seen immediately after startup. This ensures every workload is re-evaluated on a fixed cadence so images are repushed even without new Kubernetes events.
+
+### Guaranteeing digest consistency
+
+Set `digestPull: true` (or the `DIGEST_PULL` environment variable) to pin mirrored images to the digest that was active when the controller observed the workload. Copycat resolves the tag to its digest first and then pulls using that immutable reference, reducing the risk of race conditions when upstream registries re-tag images.
+
+By default, copycat overwrites existing image tags at the target registry even when the digest differs from the source so the mirrored repository always matches what is currently running. Enable the safeguard by setting `allowDifferentDigestRepush: false` (or `ALLOW_DIFFERENT_DIGEST_REPUSH=false`) when you want copycat to refuse replacing tags that already exist with a different digest. The protection is always skipped for the conventional `latest` tag to maintain the previous behavior for mutable tags.
 
 Credentials can be supplied directly in the configuration file via `username`,
 `password`, or `token`, but using environment variables (referenced through

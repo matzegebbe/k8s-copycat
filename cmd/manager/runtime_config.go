@@ -31,17 +31,19 @@ func loadConfigFile() (config.Config, bool, error) {
 
 // runtimeConfig holds all runtime configuration derived from flags, env vars and the config file.
 type runtimeConfig struct {
-	AllowedNS               []string
-	SkipCfg                 controllers.SkipConfig
-	Target                  registry.Target
-	DryRun                  bool
-	PathMap                 []util.PathMapping
-	RequestTimeout          time.Duration
-	Keychain                authn.Keychain
-	FailureCooldown         time.Duration
-	MaxConcurrentReconciles int
-	WatchResources          []controllers.ResourceType
-	ForceResync             time.Duration
+	AllowedNS                  []string
+	SkipCfg                    controllers.SkipConfig
+	Target                     registry.Target
+	DryRun                     bool
+	PathMap                    []util.PathMapping
+	RequestTimeout             time.Duration
+	Keychain                   authn.Keychain
+	FailureCooldown            time.Duration
+	DigestPull                 bool
+	AllowDifferentDigestRepush bool
+	MaxConcurrentReconciles    int
+	WatchResources             []controllers.ResourceType
+	ForceResync                time.Duration
 }
 
 const defaultRequestTimeout = 2 * time.Minute
@@ -192,6 +194,27 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		failureCooldown = durationFromMinutes(*fileCfg.FailureCooldownMinutes)
 	}
 
+	digestPull := fileCfg.DigestPull
+	if v := strings.TrimSpace(os.Getenv("DIGEST_PULL")); v != "" {
+		parsed, parseErr := strconv.ParseBool(v)
+		if parseErr != nil {
+			return runtimeConfig{}, fmt.Errorf("parse digest pull: %w", parseErr)
+		}
+		digestPull = parsed
+	}
+
+	allowDifferentDigestRepush := true
+	if fileCfg.AllowDifferentDigestRepush != nil {
+		allowDifferentDigestRepush = *fileCfg.AllowDifferentDigestRepush
+	}
+	if v := strings.TrimSpace(os.Getenv("ALLOW_DIFFERENT_DIGEST_REPUSH")); v != "" {
+		parsed, parseErr := strconv.ParseBool(v)
+		if parseErr != nil {
+			return runtimeConfig{}, fmt.Errorf("parse allow different digest repush: %w", parseErr)
+		}
+		allowDifferentDigestRepush = parsed
+	}
+
 	keychain := buildKeychainFromConfig(fileCfg.RegistryCredentials)
 
 	maxConcurrent := defaultMaxConcurrentReconciles
@@ -224,17 +247,19 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 	}
 
 	return runtimeConfig{
-		AllowedNS:               allowedNS,
-		SkipCfg:                 skipCfg,
-		Target:                  t,
-		DryRun:                  dryRun,
-		PathMap:                 fileCfg.PathMap,
-		RequestTimeout:          timeout,
-		Keychain:                keychain,
-		FailureCooldown:         failureCooldown,
-		MaxConcurrentReconciles: maxConcurrent,
-		WatchResources:          parsedWatch,
-		ForceResync:             forceResync,
+		AllowedNS:                  allowedNS,
+		SkipCfg:                    skipCfg,
+		Target:                     t,
+		DryRun:                     dryRun,
+		PathMap:                    fileCfg.PathMap,
+		RequestTimeout:             timeout,
+		Keychain:                   keychain,
+		FailureCooldown:            failureCooldown,
+		DigestPull:                 digestPull,
+		AllowDifferentDigestRepush: allowDifferentDigestRepush,
+		MaxConcurrentReconciles:    maxConcurrent,
+		WatchResources:             parsedWatch,
+		ForceResync:                forceResync,
 	}, nil
 }
 
