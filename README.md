@@ -152,6 +152,15 @@ When `failureCooldownMinutes` is set to `0`, copycat retries failed pushes immed
 
 `forceReconcileMinutes` triggers a periodic full resync for all watched resources, mirroring the behavior seen immediately after startup. This ensures every workload is re-evaluated on a fixed cadence so images are repushed even without new Kubernetes events.
 
+### Operational HTTP endpoints
+
+Copycat exposes a pair of helper endpoints on the metrics listener (default `:8080`) to trigger common maintenance actions on demand:
+
+- `POST /reset-cooldown` clears the failure cooldown state so failed mirrors are eligible for immediate retry.
+- `POST /force-reconcile` performs a one-off full reconciliation across all watched workloads, mirroring their images using the same rules as the controllers.
+
+Both endpoints return JSON responses describing the action that was taken. Requests can also be issued with `GET` for compatibility with simple tooling.
+
 ### Guaranteeing digest consistency
 
 Set `digestPull: true` (or the `DIGEST_PULL` environment variable) to pin mirrored images to the digest that was active when the controller observed the workload. Copycat resolves the tag to its digest first and then pulls using that immutable reference, reducing the risk of race conditions when upstream registries re-tag images.

@@ -170,6 +170,153 @@ type baseReconciler struct {
 	SkipPods          nameMatcher
 }
 
+type ForceReconciler struct {
+	baseReconciler
+	watch []ResourceType
+}
+
+func (r *ForceReconciler) ForceReconcile(ctx context.Context) (int, int, error) {
+	watch := r.watch
+	if len(watch) == 0 {
+		watch = AllResourceTypes()
+	}
+	workloads := 0
+	images := 0
+	var errs []error
+	for _, res := range watch {
+		switch res {
+		case ResourceDeployments:
+			var list appsv1.DeploymentList
+			if err := r.Client.List(ctx, &list); err != nil {
+				return workloads, images, err
+			}
+			for i := range list.Items {
+				d := &list.Items[i]
+				if !r.nsAllowed(d.Namespace) || r.SkipDeployments.matches(d.Namespace, d.Name) {
+					continue
+				}
+				mirrored, err := r.mirrorPodSpec(ctx, d.Namespace, d.Name, &d.Spec.Template.Spec)
+				images += mirrored
+				if err != nil {
+					errs = append(errs, fmt.Errorf("deployment %s/%s: %w", d.Namespace, d.Name, err))
+					workloads++
+					continue
+				}
+				workloads++
+			}
+		case ResourceStatefulSets:
+			var list appsv1.StatefulSetList
+			if err := r.Client.List(ctx, &list); err != nil {
+				return workloads, images, err
+			}
+			for i := range list.Items {
+				s := &list.Items[i]
+				if !r.nsAllowed(s.Namespace) || r.SkipStatefulSets.matches(s.Namespace, s.Name) {
+					continue
+				}
+				mirrored, err := r.mirrorPodSpec(ctx, s.Namespace, s.Name, &s.Spec.Template.Spec)
+				images += mirrored
+				if err != nil {
+					errs = append(errs, fmt.Errorf("statefulset %s/%s: %w", s.Namespace, s.Name, err))
+					workloads++
+					continue
+				}
+				workloads++
+			}
+		case ResourceDaemonSets:
+			var list appsv1.DaemonSetList
+			if err := r.Client.List(ctx, &list); err != nil {
+				return workloads, images, err
+			}
+			for i := range list.Items {
+				ds := &list.Items[i]
+				if !r.nsAllowed(ds.Namespace) || r.SkipDaemonSets.matches(ds.Namespace, ds.Name) {
+					continue
+				}
+				mirrored, err := r.mirrorPodSpec(ctx, ds.Namespace, ds.Name, &ds.Spec.Template.Spec)
+				images += mirrored
+				if err != nil {
+					errs = append(errs, fmt.Errorf("daemonset %s/%s: %w", ds.Namespace, ds.Name, err))
+					workloads++
+					continue
+				}
+				workloads++
+			}
+		case ResourceJobs:
+			var list batchv1.JobList
+			if err := r.Client.List(ctx, &list); err != nil {
+				return workloads, images, err
+			}
+			for i := range list.Items {
+				j := &list.Items[i]
+				if !r.nsAllowed(j.Namespace) || r.SkipJobs.matches(j.Namespace, j.Name) {
+					continue
+				}
+				mirrored, err := r.mirrorPodSpec(ctx, j.Namespace, j.Name, &j.Spec.Template.Spec)
+				images += mirrored
+				if err != nil {
+					errs = append(errs, fmt.Errorf("job %s/%s: %w", j.Namespace, j.Name, err))
+					workloads++
+					continue
+				}
+				workloads++
+			}
+		case ResourceCronJobs:
+			var list batchv1.CronJobList
+			if err := r.Client.List(ctx, &list); err != nil {
+				return workloads, images, err
+			}
+			for i := range list.Items {
+				cj := &list.Items[i]
+				if !r.nsAllowed(cj.Namespace) || r.SkipCronJobs.matches(cj.Namespace, cj.Name) {
+					continue
+				}
+				mirrored, err := r.mirrorPodSpec(ctx, cj.Namespace, cj.Name, &cj.Spec.JobTemplate.Spec.Template.Spec)
+				images += mirrored
+				if err != nil {
+					errs = append(errs, fmt.Errorf("cronjob %s/%s: %w", cj.Namespace, cj.Name, err))
+					workloads++
+					continue
+				}
+				workloads++
+			}
+		case ResourcePods:
+			var list corev1.PodList
+			if err := r.Client.List(ctx, &list); err != nil {
+				return workloads, images, err
+			}
+			for i := range list.Items {
+				p := &list.Items[i]
+				if !r.nsAllowed(p.Namespace) {
+					continue
+				}
+				skip, err := r.shouldSkipPod(ctx, p)
+				if err != nil {
+					return workloads, images, err
+				}
+				if skip {
+					continue
+				}
+				if p.Status.Phase != corev1.PodPending && p.Status.Phase != corev1.PodRunning {
+					continue
+				}
+				mirrored, err := r.mirrorPodSpec(ctx, p.Namespace, p.Name, &p.Spec)
+				images += mirrored
+				if err != nil {
+					errs = append(errs, fmt.Errorf("pod %s/%s: %w", p.Namespace, p.Name, err))
+					workloads++
+					continue
+				}
+				workloads++
+			}
+		}
+	}
+	if len(errs) > 0 {
+		return workloads, images, errors.Join(errs...)
+	}
+	return workloads, images, nil
+}
+
 func (r *baseReconciler) nsAllowed(ns string) bool {
 	if r.namespaceSkipped(ns) {
 		return false
@@ -196,14 +343,15 @@ func (r *baseReconciler) namespaceSkipped(ns string) bool {
 	return ok
 }
 
-func (r *baseReconciler) processPodSpec(ctx context.Context, ns, podName string, spec *corev1.PodSpec) (ctrl.Result, error) {
+func (r *baseReconciler) mirrorPodSpec(ctx context.Context, ns, podName string, spec *corev1.PodSpec) (int, error) {
 	if !r.nsAllowed(ns) {
-		return ctrl.Result{}, nil
+		return 0, nil
 	}
 	images := util.ImagesFromPodSpec(spec)
 	if len(images) == 0 {
-		return ctrl.Result{}, nil
+		return 0, nil
 	}
+	mirrored := 0
 	for _, img := range images {
 		meta := mirror.Metadata{
 			Namespace:     ns,
@@ -211,18 +359,30 @@ func (r *baseReconciler) processPodSpec(ctx context.Context, ns, podName string,
 			ContainerName: img.ContainerName,
 		}
 		if err := r.Pusher.Mirror(ctx, img.Image, meta); err != nil {
-			var retryErr *mirror.RetryError
-			if errors.As(err, &retryErr) {
-				delay := time.Until(retryErr.RetryAt)
-				if delay <= 0 {
-					delay = defaultRetryDelay
-				}
-				return ctrl.Result{RequeueAfter: delay}, nil
-			}
-			return ctrl.Result{RequeueAfter: defaultRetryDelay}, nil
+			return mirrored, err
 		}
+		mirrored++
 	}
-	return ctrl.Result{}, nil
+	return mirrored, nil
+}
+
+func (r *baseReconciler) processPodSpec(ctx context.Context, ns, podName string, spec *corev1.PodSpec) (ctrl.Result, error) {
+	if !r.nsAllowed(ns) {
+		return ctrl.Result{}, nil
+	}
+	_, err := r.mirrorPodSpec(ctx, ns, podName, spec)
+	if err == nil {
+		return ctrl.Result{}, nil
+	}
+	var retryErr *mirror.RetryError
+	if errors.As(err, &retryErr) {
+		delay := time.Until(retryErr.RetryAt)
+		if delay <= 0 {
+			delay = defaultRetryDelay
+		}
+		return ctrl.Result{RequeueAfter: delay}, nil
+	}
+	return ctrl.Result{RequeueAfter: defaultRetryDelay}, nil
 }
 
 type DeploymentReconciler struct{ baseReconciler }
@@ -385,7 +545,7 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) er
 		Complete(r)
 }
 
-func (r *PodReconciler) shouldSkipPod(ctx context.Context, pod *corev1.Pod) (bool, error) {
+func (r *baseReconciler) shouldSkipPod(ctx context.Context, pod *corev1.Pod) (bool, error) {
 	if r.SkipPods.matches(pod.Namespace, pod.Name) {
 		return true, nil
 	}
@@ -424,7 +584,7 @@ func (r *PodReconciler) shouldSkipPod(ctx context.Context, pod *corev1.Pod) (boo
 	return false, nil
 }
 
-func (r *PodReconciler) shouldSkipReplicaSetOwner(ctx context.Context, namespace, name string) (bool, error) {
+func (r *baseReconciler) shouldSkipReplicaSetOwner(ctx context.Context, namespace, name string) (bool, error) {
 	var rs appsv1.ReplicaSet
 	if err := r.Get(ctx, types.NamespacedName{Name: name, Namespace: namespace}, &rs); err != nil {
 		if apierrors.IsNotFound(err) {
@@ -440,7 +600,7 @@ func (r *PodReconciler) shouldSkipReplicaSetOwner(ctx context.Context, namespace
 	return false, nil
 }
 
-func (r *PodReconciler) shouldSkipJobOwner(ctx context.Context, namespace, name string) (bool, error) {
+func (r *baseReconciler) shouldSkipJobOwner(ctx context.Context, namespace, name string) (bool, error) {
 	if r.SkipJobs.matches(namespace, name) {
 		return true, nil
 	}
@@ -459,7 +619,7 @@ func (r *PodReconciler) shouldSkipJobOwner(ctx context.Context, namespace, name 
 	return false, nil
 }
 
-func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCfg SkipConfig, watch []ResourceType, maxConcurrent int) error {
+func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCfg SkipConfig, watch []ResourceType, maxConcurrent int) (*ForceReconciler, error) {
 	base := baseReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
@@ -484,36 +644,37 @@ func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCf
 	if len(watch) == 0 {
 		watch = AllResourceTypes()
 	}
+	force := &ForceReconciler{baseReconciler: base, watch: append([]ResourceType(nil), watch...)}
 	logger := ctrl.Log.WithName("controllers")
 	for _, res := range watch {
 		switch res {
 		case ResourceDeployments:
 			if err := (&DeploymentReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-				return err
+				return nil, err
 			}
 		case ResourceStatefulSets:
 			if err := (&StatefulSetReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-				return err
+				return nil, err
 			}
 		case ResourceDaemonSets:
 			if err := (&DaemonSetReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-				return err
+				return nil, err
 			}
 		case ResourceJobs:
 			if err := (&JobReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-				return err
+				return nil, err
 			}
 		case ResourceCronJobs:
 			if err := (&CronJobReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-				return err
+				return nil, err
 			}
 		case ResourcePods:
 			if err := (&PodReconciler{base}).SetupWithManager(mgr, maxConcurrent); err != nil {
-				return err
+				return nil, err
 			}
 		default:
 			logger.Error(fmt.Errorf("unsupported resource type"), "ignoring watch resource", "resource", res)
 		}
 	}
-	return nil
+	return force, nil
 }
