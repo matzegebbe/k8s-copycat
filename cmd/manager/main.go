@@ -80,6 +80,7 @@ func main() {
 	}
 
 	cooldownHTTPHandler := newCooldownHandler(logger.WithName("cooldown"))
+	forceHTTPHandler := newForceReconcileHandler(logger.WithName("force-reconcile"))
 
 	restCfg := ctrl.GetConfigOrDie()
 	kubeClient, err := kubernetes.NewForConfig(restCfg)
@@ -98,8 +99,11 @@ func main() {
 	mgrOpts := ctrl.Options{
 		Scheme: scheme,
 		Metrics: server.Options{
-			BindAddress:   metricsAddr,
-			ExtraHandlers: map[string]http.Handler{"/reset-cooldown": cooldownHTTPHandler},
+			BindAddress: metricsAddr,
+			ExtraHandlers: map[string]http.Handler{
+				"/reset-cooldown":  cooldownHTTPHandler,
+				"/force-reconcile": forceHTTPHandler,
+			},
 		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
@@ -146,11 +150,13 @@ func main() {
 		cfg.DigestPull,
 		cfg.AllowDifferentDigestRepush,
 	)
-	cooldownHTTPHandler.SetResetter(pusher)
-	if err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg, cfg.WatchResources, cfg.MaxConcurrentReconciles); err != nil {
+	forceReconciler, err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg, cfg.WatchResources, cfg.MaxConcurrentReconciles)
+	if err != nil {
 		logger.Error(err, "setup controllers failed 🙀")
 		os.Exit(1)
 	}
+	cooldownHTTPHandler.SetResetter(pusher)
+	forceHTTPHandler.SetReconciler(forceReconciler)
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		logger.Error(err, "healthz failed 🙀")
