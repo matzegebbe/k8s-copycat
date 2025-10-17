@@ -8,6 +8,9 @@ updates:
       time: "07:00"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore"
+      include: "scope"
     labels: ["deps", "ci"]
 
   - package-ecosystem: "gomod"
@@ -19,7 +22,7 @@ updates:
     open-pull-requests-limit: 10
     labels: ["deps", "go"]
     commit-message:
-      prefix: "go"
+      prefix: "chore"
       include: "scope"
     groups:
       go-patch:
@@ -39,6 +42,6 @@ updates:
       timezone: "Europe/Berlin"
     labels: ["deps", "docker"]
     commit-message:
-      prefix: "docker"
+      prefix: "chore"
       include: "scope"
     open-pull-requests-limit: 5
