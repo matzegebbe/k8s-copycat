@@ -4,6 +4,11 @@ metadata:
   name: k8s-copycat
 ---
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: test
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: k8s-copycat-manager
@@ -137,7 +142,7 @@ data:
     targetKind: docker     # ecr | docker
     logLevel: debug         # debug | info | warn | error | dpanic | panic | fatal
     dryRun: true             # enable for smoke-testing without pushing images
-    includeNamespaces: ["*"]
+    includeNamespaces: ["test"]
     watchResources:
       - pods
     # skipNamespaces: ["kube-system"]
