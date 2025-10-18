@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.1.0...v0.2.0) (2025-10-18)
+
+
+### Features
+
+* clarify dry pull logging ([48ad2c4](https://github.com/matzegebbe/k8s-copycat/commit/48ad2c446ce9edf5712920ea937ab310b37a9154))
+
 ## [0.1.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.0.13...v0.1.0) (2025-10-18)
 
 
