@@ -53,6 +53,7 @@ type Config struct {
 	SkipNames                  ResourceSkipNames    `yaml:"skipNames"`
 	WatchResources             []string             `yaml:"watchResources"`
 	DryRun                     bool                 `yaml:"dryRun"`
+	DryPull                    bool                 `yaml:"dryPull"`
 	RequestTimeoutSeconds      *int                 `yaml:"requestTimeout"`
 	FailureCooldownMinutes     *int                 `yaml:"failureCooldownMinutes"`
 	ForceReconcileMinutes      *int                 `yaml:"forceReconcileMinutes"`

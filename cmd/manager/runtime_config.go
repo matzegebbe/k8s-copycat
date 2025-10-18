@@ -35,6 +35,7 @@ type runtimeConfig struct {
 	SkipCfg                    controllers.SkipConfig
 	Target                     registry.Target
 	DryRun                     bool
+	DryPull                    bool
 	PathMap                    []util.PathMapping
 	RequestTimeout             time.Duration
 	Keychain                   authn.Keychain
@@ -50,7 +51,7 @@ const defaultRequestTimeout = 2 * time.Minute
 const defaultMaxConcurrentReconciles = 2
 
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
-func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Config, cfgFound bool) (runtimeConfig, error) {
+func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCfg config.Config, cfgFound bool) (runtimeConfig, error) {
 	allowedNS := resolveAllowedNamespaces(os.Getenv("INCLUDE_NAMESPACES"), fileCfg.IncludeNamespaces)
 	skipCfg := controllers.SkipConfig{
 		Namespaces:   resolveList(os.Getenv("SKIP_NAMESPACES"), fileCfg.SkipNamespaces),
@@ -162,6 +163,17 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		dryRun = dryRunFlag || fileCfg.DryRun
 	}
 
+	dryPullEnv := os.Getenv("DRY_PULL")
+	dryPull := false
+	if dryPullEnv != "" {
+		val := strings.ToLower(strings.TrimSpace(dryPullEnv))
+		if val == "1" || val == "true" || val == "yes" {
+			dryPull = true
+		}
+	} else {
+		dryPull = dryPullFlag || fileCfg.DryPull
+	}
+
 	timeoutSeconds := strings.TrimSpace(os.Getenv("REGISTRY_REQUEST_TIMEOUT"))
 	timeout := defaultRequestTimeout
 	if timeoutSeconds != "" {
@@ -251,6 +263,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag bool, fileCfg config.Conf
 		SkipCfg:                    skipCfg,
 		Target:                     t,
 		DryRun:                     dryRun,
+		DryPull:                    dryPull,
 		PathMap:                    fileCfg.PathMap,
 		RequestTimeout:             timeout,
 		Keychain:                   keychain,

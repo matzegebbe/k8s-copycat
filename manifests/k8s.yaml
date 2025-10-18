@@ -145,6 +145,7 @@ data:
     targetKind: docker     # ecr | docker
     logLevel: debug         # debug | info | warn | error | dpanic | panic | fatal
     dryRun: true             # enable for smoke-testing without pushing images
+    dryPull: true            # log source pulls without contacting upstream registries
     includeNamespaces: ["test"]
     watchResources:
       - pods

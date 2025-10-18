@@ -27,6 +27,7 @@ import (
 type Pusher interface {
 	Mirror(ctx context.Context, sourceImage string, meta Metadata) error
 	DryRun() bool
+	DryPull() bool
 	ResetCooldown() (cleared int, cooldownEnabled bool)
 }
 
@@ -40,6 +41,7 @@ type Metadata struct {
 type pusher struct {
 	target                     registry.Target
 	dryRun                     bool
+	dryPull                    bool
 	transform                  func(string) string
 	pullByDigest               bool
 	allowDifferentDigestRepush bool
@@ -76,7 +78,7 @@ func (e *RetryError) Unwrap() error {
 	return e.Cause
 }
 
-func NewPusher(t registry.Target, dryRun bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, allowDifferentDigestRepush bool) Pusher {
+func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, allowDifferentDigestRepush bool) Pusher {
 	if transform == nil {
 		transform = util.CleanRepoName
 	}
@@ -97,6 +99,7 @@ func NewPusher(t registry.Target, dryRun bool, transform func(string) string, lo
 	return &pusher{
 		target:                     t,
 		dryRun:                     dryRun,
+		dryPull:                    dryPull,
 		transform:                  transform,
 		pullByDigest:               pullByDigest,
 		allowDifferentDigestRepush: allowDifferentDigestRepush,
@@ -216,6 +219,16 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	log.V(1).Info("starting pull from source")
 	log.V(1).Info("pull progress update", "percentage", "0%")
+
+	if p.dryPull {
+		log.Info(
+			"dry pull: skipping source registry fetch",
+			"result", "skipped",
+			"dryPull", true,
+			"sourceReference", pullRef.String(),
+		)
+		return nil
+	}
 
 	pullCtx, cancelPull := p.operationContext(ctx)
 	defer cancelPull()
@@ -430,6 +443,10 @@ func hasRegistryAuthDiagnostic(diags []remotetransport.Diagnostic) bool {
 
 func (p *pusher) DryRun() bool {
 	return p.dryRun
+}
+
+func (p *pusher) DryPull() bool {
+	return p.dryPull
 }
 
 func (p *pusher) ResetCooldown() (int, bool) {
