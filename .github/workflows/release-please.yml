@@ -1,9 +1,10 @@
-name: release-please
+name: Release Please
 
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   release:
@@ -15,4 +16,6 @@ jobs:
       - name: Run release-please
         uses: googleapis/release-please-action@v4
         with:
-          release-type: go
+          command: manifest
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

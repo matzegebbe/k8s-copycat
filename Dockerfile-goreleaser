@@ -1,8 +1,0 @@
-FROM alpine:3.22 AS certs
-RUN apk --no-cache add ca-certificates
-
-FROM scratch
-COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY k8s-copycat /k8s-copycat
-USER 65532:65532
-ENTRYPOINT ["/k8s-copycat"]
