@@ -22,6 +22,9 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["get","list","watch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get","list","watch"]
   - apiGroups: ["apps"]
     resources: ["deployments","statefulsets","replicasets","daemonsets"]
     verbs: ["get","list","watch"]
@@ -70,7 +73,7 @@ spec:
               readOnly: true
           image: ghcr.io/matzegebbe/k8s-copycat:kind
           imagePullPolicy: IfNotPresent
-          env:
+          #env:
             # choose one of: ecr | docker
             #- name: TARGET_KIND
             #  value: "docker"
