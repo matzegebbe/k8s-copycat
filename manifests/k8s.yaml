@@ -4,6 +4,11 @@ metadata:
   name: k8s-copycat
 ---
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: test
+---
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: k8s-copycat-manager
@@ -16,6 +21,9 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["pods"]
+    verbs: ["get","list","watch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
     verbs: ["get","list","watch"]
   - apiGroups: ["apps"]
     resources: ["deployments","statefulsets","replicasets","daemonsets"]
@@ -65,7 +73,7 @@ spec:
               readOnly: true
           image: ghcr.io/matzegebbe/k8s-copycat:kind
           imagePullPolicy: IfNotPresent
-          env:
+          #env:
             # choose one of: ecr | docker
             #- name: TARGET_KIND
             #  value: "docker"
@@ -137,7 +145,7 @@ data:
     targetKind: docker     # ecr | docker
     logLevel: debug         # debug | info | warn | error | dpanic | panic | fatal
     dryRun: true             # enable for smoke-testing without pushing images
-    includeNamespaces: ["*"]
+    includeNamespaces: ["test"]
     watchResources:
       - pods
     # skipNamespaces: ["kube-system"]
