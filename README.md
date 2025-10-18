@@ -43,6 +43,8 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `FAILURE_COOLDOWN_MINUTES`: minutes to wait before retrying a failed mirror operation (default `1440`, set to `0` to disable)
 - `DIGEST_PULL`: when `true`, resolve tag references to their digest before pulling (default `false`)
 - `ALLOW_DIFFERENT_DIGEST_REPUSH`: when `true`, allow overwriting an existing tag that already exists with a different digest (default `true`, always ignored for the `latest` tag)
+- `DRY_RUN`: when `true`, mirror images without pushing them to the target registry (default `false`)
+- `DRY_PULL`: when `true`, log which images would be fetched from the source registry without contacting it (default `false`)
 - `METRICS_ADDR`: bind address for the Prometheus metrics endpoint (default `:8080`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
 

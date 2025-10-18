@@ -221,7 +221,12 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	log.V(1).Info("pull progress update", "percentage", "0%")
 
 	if p.dryPull {
-		log.Info("dry pull: skipping source registry fetch", "result", "skipped", "dryPull", true)
+		log.Info(
+			"dry pull: skipping source registry fetch",
+			"result", "skipped",
+			"dryPull", true,
+			"sourceReference", pullRef.String(),
+		)
 		return nil
 	}
 
