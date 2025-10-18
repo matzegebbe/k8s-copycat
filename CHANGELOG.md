@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.2](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.1...v0.2.2) (2025-10-18)
+
+
+### Miscellaneous
+
+* migrate release process to release-please ([22a0585](https://github.com/matzegebbe/k8s-copycat/commit/22a0585e4edf81d31cbbd58c78159f60390d9b41))
+* migrate releases to release-please ([43c3e1c](https://github.com/matzegebbe/k8s-copycat/commit/43c3e1c162a35caf91cadaa62ee6ec0d6d85387f))
+
 ## [0.2.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.0...v0.2.1) (2025-10-18)
 
 
