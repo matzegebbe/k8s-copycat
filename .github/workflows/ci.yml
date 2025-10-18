@@ -1,17 +1,62 @@
-name: Build and Release
+name: Build, Test, and Release
 
 on:
   push:
     branches:
       - '**'
+  pull_request:
+    branches:
+      - '**'
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  docker:
-    if: github.ref_type == 'branch'
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Run unit tests
+        run: go test ./...
+
+  smoke-test:
+    name: Kind smoke test
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image for smoke test
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: k8s-copycat:ci
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.7.0
+        with:
+          cluster_name: copycat-ci
+      - name: Load controller image into kind
+        run: kind load docker-image k8s-copycat:ci --name copycat-ci
+      - name: Deploy k8s-copycat manifest
+        run: |
+          kubectl apply -f manifests/k8s.yaml
+          kubectl set image deployment/k8s-copycat -n k8s-copycat k8s-copycat=k8s-copycat:ci
+          kubectl wait --for=condition=available deployment/k8s-copycat -n k8s-copycat --timeout=180s
+          kubectl logs deployment/k8s-copycat -n k8s-copycat --tail=50
+
+  docker-publish:
+    if: github.event_name == 'push' && github.ref_type == 'branch'
+    needs:
+      - smoke-test
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -29,8 +74,6 @@ jobs:
           BRANCH_SLUG="${BRANCH_SLUG##-}"
           BRANCH_SLUG="${BRANCH_SLUG%%-}"
           echo "BRANCH_SLUG=${BRANCH_SLUG}" >> $GITHUB_ENV
-      - name: Run tests
-        run: go test ./...
       - name: Build and push
         uses: docker/build-push-action@v6
         with:

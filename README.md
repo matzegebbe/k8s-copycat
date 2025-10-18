@@ -192,6 +192,42 @@ Enable dry run mode by either:
 - Passing the `--dry-run` flag to the binary
 - Setting `dryRun: true` in your config file
 
+## Testing with Kind
+
+You can validate a copycat deployment locally by creating a [kind](https://kind.sigs.k8s.io/) cluster and applying the provided manifest. The default configuration in `manifests/k8s.yaml` enables dry-run mode so no registry pushes are attempted during the smoke test.
+
+1. Create a fresh kind cluster:
+
+   ```bash
+   kind create cluster --name copycat
+   ```
+
+2. Apply the manifest from this repository:
+
+   ```bash
+   kubectl apply -f manifests/k8s.yaml
+   ```
+
+3. Wait for the controller to become ready:
+
+   ```bash
+   kubectl wait --for=condition=available deployment/k8s-copycat -n k8s-copycat --timeout=120s
+   ```
+
+4. Inspect the logs to confirm the manager starts successfully and begins watching workloads:
+
+   ```bash
+   kubectl logs deployment/k8s-copycat -n k8s-copycat
+   ```
+
+5. When you are done testing, delete the cluster:
+
+   ```bash
+   kind delete cluster --name copycat
+   ```
+
+Switch off dry-run mode and update the configuration (for example, uncomment the Docker registry settings in the ConfigMap) before deploying to a shared "General" cluster so that images are mirrored into your real registry.
+
 ## Metrics
 
 k8s-copycat exposes Prometheus metrics on `/metrics`. The listener binds to the

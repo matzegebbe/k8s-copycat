@@ -144,8 +144,8 @@ data:
   config.yaml: |
     targetKind: docker     # ecr | docker
     logLevel: debug         # debug | info | warn | error | dpanic | panic | fatal
-    dryRun: false
-    includeNamespaces: ["test"]
+    dryRun: true             # enable for smoke-testing without pushing images
+    includeNamespaces: ["default"]
     # skipNamespaces: ["kube-system"]
     # skipNames:
     #   deployments: ["copycat"]
@@ -176,13 +176,13 @@ data:
     #        }
     #      ]
     #    }
-    docker:
-      registry: "registry.test.svc.cluster.local:5000"
-      repoPrefix: "mirrors"
-      insecure: true
-    registryCredentials:
-      - registry: registry-1.docker.io
-        usernameEnv: DOCKERHUB_USERNAME
-        passwordEnv: DOCKERHUB_PASSWORD
-      - registry: ghcr.io
-        tokenEnv: GHCR_TOKEN
+    #docker:
+    #  registry: "registry.test.svc.cluster.local:5000"
+    #  repoPrefix: "mirrors"
+    #  insecure: true
+    #registryCredentials:
+    #  - registry: registry-1.docker.io
+    #    usernameEnv: DOCKERHUB_USERNAME
+    #    passwordEnv: DOCKERHUB_PASSWORD
+    #  - registry: ghcr.io
+    #    tokenEnv: GHCR_TOKEN
