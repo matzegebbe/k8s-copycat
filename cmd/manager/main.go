@@ -46,8 +46,12 @@ func main() {
 	flag.StringVar(&metricsAddr, "metrics-bind-address", metricsAddr, "metrics bind address")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", probeAddr, "health probe bind address")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", true, "enable leader election")
-	var dryRunFlag bool
+	var (
+		dryRunFlag  bool
+		dryPullFlag bool
+	)
 	flag.BoolVar(&dryRunFlag, "dry-run", false, "simulate image push without actually pushing")
+	flag.BoolVar(&dryPullFlag, "dry-pull", false, "simulate image pull without contacting the source registry")
 
 	fileCfg, cfgFound, err := loadConfigFile()
 	if err != nil {
@@ -73,7 +77,7 @@ func main() {
 	logger := zap.New(zap.UseFlagOptions(&opts))
 	ctrl.SetLogger(logger)
 	ctx := context.Background()
-	cfg, err := loadRuntimeConfig(ctx, dryRunFlag, fileCfg, cfgFound)
+	cfg, err := loadRuntimeConfig(ctx, dryRunFlag, dryPullFlag, fileCfg, cfgFound)
 	if err != nil {
 		logger.Error(err, "resolve configuration failed 🙀")
 		os.Exit(1)
@@ -142,6 +146,7 @@ func main() {
 	pusher := mirror.NewPusher(
 		cfg.Target,
 		cfg.DryRun,
+		cfg.DryPull,
 		transformer,
 		logger.WithName("mirror"),
 		cfg.Keychain,

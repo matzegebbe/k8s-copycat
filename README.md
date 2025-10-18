@@ -183,14 +183,14 @@ docker build -t ghcr.io/matzegebbe/k8s-copycat:main .
 - Manager (controller-runtime) runs controllers for Deployments, StatefulSets, Jobs, CronJobs, and Pods
 - On events, we collect images from the PodSpec and push them to the target registry
 
-## Dry Run Mode
+## Dry Run Modes
 
-You can run k8s-copycat in dry run mode to simulate image pushes without actually pushing them. This is useful for testing and validation.
+k8s-copycat provides two complementary dry-run toggles that help validate configuration without mutating registries.
 
-Enable dry run mode by either:
+- **Push dry-run** skips writing images to the target registry after they have been mirrored locally. Enable it with the `--dry-run` flag, by setting `dryRun: true` in your configuration file, or through the `DRY_RUN` environment variable.
+- **Pull dry-run** logs which images would be retrieved from the source registry without contacting it. Enable it with the `--dry-pull` flag, by setting `dryPull: true` in your configuration file, or via the `DRY_PULL` environment variable.
 
-- Passing the `--dry-run` flag to the binary
-- Setting `dryRun: true` in your config file
+Both flags can be used together or independently depending on how much of the mirroring workflow you want to exercise.
 
 ## Testing with Kind
 

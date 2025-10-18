@@ -35,6 +35,14 @@ func TestResolveRepoPathWithMetadata(t *testing.T) {
 	}
 }
 
+func TestDryPullOption(t *testing.T) {
+	p := NewPusher(fakeTarget{}, true, true, nil, testr.New(t), nil, 0, 0, false, true)
+
+	if !p.DryPull() {
+		t.Fatalf("expected dry pull to be enabled")
+	}
+}
+
 func TestExpandRepoPrefixSkipsEmptySegments(t *testing.T) {
 	cases := []struct {
 		name string
