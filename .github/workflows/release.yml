@@ -4,8 +4,9 @@ on:
   push:
     tags:
       - 'v*'
-      - '*.*.*'
-
+  release:
+    types: [published, prereleased]
+    
 jobs:
   build:
     runs-on: ubuntu-latest
