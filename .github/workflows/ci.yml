@@ -48,7 +48,8 @@ jobs:
           kubectl apply -f manifests/k8s.yaml
           kubectl set image deployment/k8s-copycat -n k8s-copycat k8s-copycat=k8s-copycat:ci
           kubectl wait --for=condition=available deployment/k8s-copycat -n k8s-copycat --timeout=180s
-          kubectl logs deployment/k8s-copycat -n k8s-copycat --tail=50
+          kubectl logs deployment/k8s-copycat -n k8s-copycat --tail=200
+          echo "happy k8s-copycat 😺"
 
   docker-publish:
     if: github.event_name == 'push' && github.ref_type == 'branch'

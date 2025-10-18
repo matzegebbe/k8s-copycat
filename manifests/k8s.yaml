@@ -18,7 +18,7 @@ rules:
     resources: ["pods"]
     verbs: ["get","list","watch"]
   - apiGroups: ["apps"]
-    resources: ["deployments","statefulsets","replicasets"]
+    resources: ["deployments","statefulsets","replicasets","daemonsets"]
     verbs: ["get","list","watch"]
   - apiGroups: ["batch"]
     resources: ["jobs","cronjobs"]
@@ -63,7 +63,7 @@ spec:
             - name: k8s-copycat-config
               mountPath: /config
               readOnly: true
-          image: ghcr.io/matzegebbe/k8s-copycat:main
+          image: ghcr.io/matzegebbe/k8s-copycat:kind
           imagePullPolicy: IfNotPresent
           env:
             # choose one of: ecr | docker
@@ -87,13 +87,17 @@ spec:
             #  valueFrom: { secretKeyRef: { name: registry-creds, key: dockerhub-username } }
             #- name: DOCKERHUB_PASSWORD
             #  valueFrom: { secretKeyRef: { name: registry-creds, key: dockerhub-password } }
+            #- name: TARGET_USERNAME
+            #  valueFrom: { secretKeyRef: { name: registry-creds, key: username } }
+            #- name: TARGET_PASSWORD
+            #  valueFrom: { secretKeyRef: { name: registry-creds, key: password } }
             #- name: GHCR_TOKEN
             #  valueFrom: { secretKeyRef: { name: registry-creds, key: ghcr-token } }
             # include namespaces: "*" or "default,prod"
             #- name: CONFIG_PATH
             #  value: "/config/config.yaml"
-            - name: INCLUDE_NAMESPACES
-              value: "test"
+            #- name: INCLUDE_NAMESPACES
+            #  value: "test"
             #- name: SKIP_NAMESPACES
             #  value: "kube-system,copycat"
             #- name: SKIP_DEPLOYMENTS
@@ -122,18 +126,6 @@ spec:
             items:
               - key: config.yaml
                 path: config.yaml
-#         - name: TARGET_KIND
-#           value: "docker"
-#         - name: TARGET_REGISTRY
-#           value: "ghcr.io"
-#         - name: TARGET_REPO_PREFIX
-#           value: "mirrors"
-#         - name: TARGET_INSECURE
-#           value: "true"
-#         - name: TARGET_USERNAME
-#           valueFrom: { secretKeyRef: { name: registry-creds, key: username } }
-#         - name: TARGET_PASSWORD
-#           valueFrom: { secretKeyRef: { name: registry-creds, key: password } }
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -145,7 +137,9 @@ data:
     targetKind: docker     # ecr | docker
     logLevel: debug         # debug | info | warn | error | dpanic | panic | fatal
     dryRun: true             # enable for smoke-testing without pushing images
-    includeNamespaces: ["default"]
+    includeNamespaces: ["*"]
+    watchResources:
+      - pods
     # skipNamespaces: ["kube-system"]
     # skipNames:
     #   deployments: ["copycat"]
@@ -176,10 +170,10 @@ data:
     #        }
     #      ]
     #    }
-    #docker:
-    #  registry: "registry.test.svc.cluster.local:5000"
+    docker:
+      registry: "registry.test.svc.cluster.local:5000"
     #  repoPrefix: "mirrors"
-    #  insecure: true
+      insecure: true
     #registryCredentials:
     #  - registry: registry-1.docker.io
     #    usernameEnv: DOCKERHUB_USERNAME
