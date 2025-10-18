@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.0...v0.2.1) (2025-10-18)
+
+
+### Bug Fixes
+
+* also create release on api ([a4725b7](https://github.com/matzegebbe/k8s-copycat/commit/a4725b787f4b21f3c9013afce8ead1faad4eb303))
+* also create release on api  ([bb6485c](https://github.com/matzegebbe/k8s-copycat/commit/bb6485c93138ac5360709461367c1478a898d81e))
+
 ## [0.2.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.1.0...v0.2.0) (2025-10-18)
 
 
