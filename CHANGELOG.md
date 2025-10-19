@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.5](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.4...v0.2.5) (2025-10-19)
+
+
+### Continuous Integration
+
+* add token to release-please workflow configuration ([049442a](https://github.com/matzegebbe/k8s-copycat/commit/049442a4b6d0af110de0bccaf8b1d5a9c2d3c2b6))
+
 ## [0.2.4](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.3...v0.2.4) (2025-10-19)
 
 
