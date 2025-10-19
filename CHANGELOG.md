@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.4](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.3...v0.2.4) (2025-10-19)
+
+
+### Bug Fixes
+
+* Update tag pattern for release workflow vx.x.x ([1457870](https://github.com/matzegebbe/k8s-copycat/commit/145787086397af64f4e05faec86e555207f60d43))
+
 ## [0.2.3](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.2...v0.2.3) (2025-10-19)
 
 
