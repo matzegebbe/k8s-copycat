@@ -269,6 +269,20 @@ sum(rate(k8s_copycat_registry_push_error_total[5m]))
 
 These queries reveal the busiest images, overall push throughput, and any spikes in failed pushes.
 
+## Automating Releases with a Personal Access Token
+
+The release workflow relies on [Release Please](https://github.com/googleapis/release-please) to create tags and GitHub releases.
+To allow the follow-up publishing workflow to trigger automatically, configure Release Please to use a
+personal access token (PAT) instead of the default `GITHUB_TOKEN`:
+
+1. Create a **fine-grained personal access token** in GitHub under **Settings → Developer settings → Fine-grained tokens**.
+   When prompted for **Repository access**, choose **Only select repositories** and pick the repository that hosts k8s-copycat.
+   This scope keeps the token limited to the project that needs to publish releases.
+2. Grant the token the **Contents: Read and write** and **Metadata: Read-only** permissions.
+3. Store the token as a repository secret named `RELEASE_PLEASE_PAT`.
+4. The `.github/workflows/release-please.yml` workflow is already configured to pass that secret to Release Please so releases
+   created by the action trigger the downstream publishing workflow.
+
 ## Contributing
 
 See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the coding standards,
