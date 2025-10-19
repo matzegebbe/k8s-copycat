@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.3](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.2...v0.2.3) (2025-10-19)
+
+
+### Continuous Integration
+
+* release on tags ([a722aa9](https://github.com/matzegebbe/k8s-copycat/commit/a722aa9777e0175cb3ade3233b80378408a6aeb4))
+
 ## [0.2.2](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.1...v0.2.2) (2025-10-18)
 
 
