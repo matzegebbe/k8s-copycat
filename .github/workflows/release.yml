@@ -3,7 +3,7 @@ name: Publish Release Images
 on:
   push:
     tags:
-      - 'v*'
+      - v*.*.*
   release:
     types: [published]
   workflow_dispatch:
