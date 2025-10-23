@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.2.6](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.5...v0.2.6) (2025-10-23)
+
+
+### Bug Fixes
+
+* adjust registry push logging ([7522ec5](https://github.com/matzegebbe/k8s-copycat/commit/7522ec556dbf18d26cba47dcb161d240d84f48e1))
+* **logging:** adjust push log verbosity ([e92e5eb](https://github.com/matzegebbe/k8s-copycat/commit/e92e5ebb163916e4045d25fd8d07abaa4fbd9165))
+* rename registry exclusion configuration ([ebad7b1](https://github.com/matzegebbe/k8s-copycat/commit/ebad7b11608d552cf854c4b0cafb5277d6872fec))
+* rename registry exclusion configuration ([ca22f7d](https://github.com/matzegebbe/k8s-copycat/commit/ca22f7d92a9a5368a7b196abeae74aac052aa5eb))
+
+
+### Miscellaneous
+
+* **deps:** bump actions/setup-go from 5 to 6 ([d66ce81](https://github.com/matzegebbe/k8s-copycat/commit/d66ce81f44e386e47386534715d59c21db177ef0))
+* **deps:** bump actions/setup-go from 5 to 6 ([c6b4778](https://github.com/matzegebbe/k8s-copycat/commit/c6b47787b54bcca19b45e348d427a415b13eb0a7))
+* **deps:** bump helm/kind-action from 1.7.0 to 1.12.0 ([09050ea](https://github.com/matzegebbe/k8s-copycat/commit/09050ea966e274c540c3916967a4de7de0a99bf1))
+* **deps:** bump helm/kind-action from 1.7.0 to 1.12.0 ([42ff90d](https://github.com/matzegebbe/k8s-copycat/commit/42ff90dd47203e39a14ebc6f2f5bc3971219c8ad))
+* **deps:** bump the go-patch group with 2 updates ([0d97f97](https://github.com/matzegebbe/k8s-copycat/commit/0d97f977da7608704a1972ea9cf902bd71c536da))
+* **deps:** bump the go-patch group with 2 updates ([36cf003](https://github.com/matzegebbe/k8s-copycat/commit/36cf003fca3187bf3bec33c5ef1491fda5aa555e))
+
 ## [0.2.5](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.4...v0.2.5) (2025-10-19)
 
 
