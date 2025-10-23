@@ -33,6 +33,7 @@ func loadConfigFile() (config.Config, bool, error) {
 type runtimeConfig struct {
 	AllowedNS                  []string
 	SkipCfg                    controllers.SkipConfig
+	ExcludedRegistries         []string
 	Target                     registry.Target
 	DryRun                     bool
 	DryPull                    bool
@@ -62,6 +63,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		CronJobs:     resolveList(os.Getenv("SKIP_CRONJOBS"), fileCfg.SkipNames.CronJobs),
 		Pods:         resolveList(os.Getenv("SKIP_PODS"), fileCfg.SkipNames.Pods),
 	}
+	excludedRegistries := resolveList(os.Getenv("EXCLUDE_REGISTRIES"), fileCfg.ExcludeRegistries)
 
 	watchResources := resolveList(os.Getenv("WATCH_RESOURCES"), fileCfg.WatchResources)
 	var parsedWatch []controllers.ResourceType
@@ -261,6 +263,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 	return runtimeConfig{
 		AllowedNS:                  allowedNS,
 		SkipCfg:                    skipCfg,
+		ExcludedRegistries:         excludedRegistries,
 		Target:                     t,
 		DryRun:                     dryRun,
 		DryPull:                    dryPull,

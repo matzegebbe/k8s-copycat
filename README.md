@@ -38,6 +38,7 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `INCLUDE_NAMESPACES`: `*` or comma-separated list (e.g., `default,prod`)
 - `SKIP_NAMESPACES`: comma-separated namespaces that should be ignored entirely
 - `SKIP_DEPLOYMENTS`, `SKIP_STATEFULSETS`, `SKIP_DAEMONSETS`, `SKIP_JOBS`, `SKIP_CRONJOBS`, `SKIP_PODS`: comma-separated workload names to ignore
+- `EXCLUDE_REGISTRIES`: comma-separated list of registry prefixes that should be skipped entirely. Include the configured target registry (for example, `123456789.dkr.ecr.eu-central-1.amazonaws.com`) to avoid mirroring back into the same registry.
 - `WATCH_RESOURCES`: comma-separated list of resource types to watch (default `deployments,statefulsets,daemonsets,jobs,cronjobs,pods`)
 - `REGISTRY_REQUEST_TIMEOUT`: override the timeout (in seconds) for individual pull/push operations (default `120`)
 - `FAILURE_COOLDOWN_MINUTES`: minutes to wait before retrying a failed mirror operation (default `1440`, set to `0` to disable)
