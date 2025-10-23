@@ -48,6 +48,8 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `METRICS_ADDR`: bind address for the Prometheus metrics endpoint (default `:8080`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
 
+When `DIGEST_PULL` remains disabled, copycat automatically detects multi-architecture manifest lists, logs the detection, and mirrors all referenced platform images.
+
 ### Selecting watched workloads
 
 By default, k8s-copycat watches Deployments, StatefulSets, DaemonSets, Jobs,
