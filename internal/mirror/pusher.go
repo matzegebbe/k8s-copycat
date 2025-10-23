@@ -202,7 +202,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	log = log.WithValues("target", target)
 
-	log.Info("resolved target reference", "reference", target)
+	log.V(1).Info("resolved target reference", "reference", target)
 
 	if skip, err := p.beginProcessing(target, log); err != nil {
 		log.Error(err, "unable to begin processing")
@@ -335,9 +335,9 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	if headErr == nil {
 		if headDesc.Digest == srcDigest {
 			if p.dryRun {
-				log.Info("image already present at target", "digest", srcDigest.String(), "dryRun", true, "result", "skipped")
+				log.V(1).Info("image already present at target", "digest", srcDigest.String(), "dryRun", true, "result", "skipped")
 			} else {
-				log.Info("image already present at target", "digest", srcDigest.String())
+				log.V(1).Info("image already present at target", "digest", srcDigest.String())
 			}
 			return nil
 		}
@@ -346,17 +346,17 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		case name.Tag:
 			tagStr := targetTag.TagStr()
 			if strings.EqualFold(tagStr, "latest") {
-				log.Info("image already present with different digest for latest tag, updating", "currentDigest", headDesc.Digest.String(), "sourceDigest", srcDigest.String())
+				log.V(1).Info("image already present with different digest for latest tag, updating", "currentDigest", headDesc.Digest.String(), "sourceDigest", srcDigest.String())
 			} else if !p.allowDifferentDigestRepush {
 				err := fmt.Errorf("target image %s exists with digest %s, refusing to overwrite with source digest %s", target, headDesc.Digest.String(), srcDigest.String())
 				log.Error(err, "digest mismatch detected")
 				metrics.RecordPushError(target)
 				return p.failureResult(target, err)
 			} else {
-				log.Info("image already present with different digest, updating per configuration", "currentDigest", headDesc.Digest.String(), "sourceDigest", srcDigest.String())
+				log.V(1).Info("image already present with different digest, updating per configuration", "currentDigest", headDesc.Digest.String(), "sourceDigest", srcDigest.String())
 			}
 		default:
-			log.Info("image already present with different digest, updating", "currentDigest", headDesc.Digest.String(), "sourceDigest", srcDigest.String())
+			log.V(1).Info("image already present with different digest, updating", "currentDigest", headDesc.Digest.String(), "sourceDigest", srcDigest.String())
 		}
 	} else if te, ok := headErr.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
 		// continue to push
@@ -375,7 +375,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		log.Info("dry run: skipping push", "result", "skipped", "dryRun", true)
 		return nil
 	}
-	log.Info("pushing image to target")
+	log.Info("pushing image to target", "digest", srcDigest.String())
 	log.V(1).Info("push progress update", "percentage", "0%")
 
 	pushCtx, cancelPush := p.operationContext(ctx)
