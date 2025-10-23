@@ -51,6 +51,7 @@ type Config struct {
 	IncludeNamespaces          []string             `yaml:"includeNamespaces"`
 	SkipNamespaces             []string             `yaml:"skipNamespaces"`
 	SkipNames                  ResourceSkipNames    `yaml:"skipNames"`
+	ExcludeRegistries          []string             `yaml:"excludeRegistries"`
 	WatchResources             []string             `yaml:"watchResources"`
 	DryRun                     bool                 `yaml:"dryRun"`
 	DryPull                    bool                 `yaml:"dryPull"`

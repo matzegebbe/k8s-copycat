@@ -154,6 +154,7 @@ func main() {
 		cfg.FailureCooldown,
 		cfg.DigestPull,
 		cfg.AllowDifferentDigestRepush,
+		cfg.ExcludedRegistries,
 	)
 	forceReconciler, err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg, cfg.WatchResources, cfg.MaxConcurrentReconciles)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -53,6 +54,7 @@ type pusher struct {
 	failureCooldown            time.Duration
 	failed                     map[string]time.Time
 	now                        func() time.Time
+	excludedRegistries         []string
 }
 
 const DefaultFailureCooldown = 24 * time.Hour
@@ -78,7 +80,7 @@ func (e *RetryError) Unwrap() error {
 	return e.Cause
 }
 
-func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, allowDifferentDigestRepush bool) Pusher {
+func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, allowDifferentDigestRepush bool, excluded []string) Pusher {
 	if transform == nil {
 		transform = util.CleanRepoName
 	}
@@ -96,6 +98,8 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 	if failureCooldown < 0 {
 		failureCooldown = DefaultFailureCooldown
 	}
+	normalizedExclusions := normalizeExcludedRegistries(excluded)
+
 	return &pusher{
 		target:                     t,
 		dryRun:                     dryRun,
@@ -110,6 +114,7 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 		failureCooldown:            failureCooldown,
 		failed:                     make(map[string]time.Time),
 		now:                        time.Now,
+		excludedRegistries:         normalizedExclusions,
 	}
 }
 
@@ -144,6 +149,15 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	}
 	if meta.ContainerName != "" {
 		log = log.WithValues("container", meta.ContainerName)
+	}
+
+	if excluded, ok := p.matchExcludedRegistry(src); ok {
+		log.Info(
+			"source matches excluded registry prefix, skipping",
+			"excludedPrefix", excluded,
+			"result", "skipped",
+		)
+		return nil
 	}
 
 	srcRef, err := name.ParseReference(src, name.WeakValidation)
@@ -624,4 +638,75 @@ func expandRepoPrefix(prefix string, meta Metadata) string {
 		parts = append(parts, seg)
 	}
 	return strings.Join(parts, "/")
+}
+
+func normalizeExcludedRegistries(provided []string) []string {
+	unique := make(map[string]struct{})
+	for _, val := range provided {
+		normalized := normalizeRegistryPrefix(val)
+		if normalized == "" {
+			continue
+		}
+		unique[normalized] = struct{}{}
+	}
+	if len(unique) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(unique))
+	for val := range unique {
+		out = append(out, val)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func normalizeRegistryPrefix(val string) string {
+	trimmed := strings.TrimSpace(val)
+	if trimmed == "" {
+		return ""
+	}
+	trimmed = strings.ToLower(trimmed)
+	trimmed = strings.TrimPrefix(trimmed, "https://")
+	trimmed = strings.TrimPrefix(trimmed, "http://")
+	return strings.TrimSuffix(trimmed, "/")
+}
+
+func normalizeImageReference(val string) string {
+	trimmed := strings.TrimSpace(val)
+	if trimmed == "" {
+		return ""
+	}
+	trimmed = strings.ToLower(trimmed)
+	trimmed = strings.TrimPrefix(trimmed, "https://")
+	return strings.TrimPrefix(trimmed, "http://")
+}
+
+func hasBoundaryPrefix(s, prefix string) bool {
+	if prefix == "" {
+		return false
+	}
+	if !strings.HasPrefix(s, prefix) {
+		return false
+	}
+	if len(s) == len(prefix) {
+		return true
+	}
+	next := s[len(prefix)]
+	return next == '/' || next == ':' || next == '@'
+}
+
+func (p *pusher) matchExcludedRegistry(src string) (string, bool) {
+	if len(p.excludedRegistries) == 0 {
+		return "", false
+	}
+	normalized := normalizeImageReference(src)
+	if normalized == "" {
+		return "", false
+	}
+	for _, prefix := range p.excludedRegistries {
+		if hasBoundaryPrefix(normalized, prefix) {
+			return prefix, true
+		}
+	}
+	return "", false
 }

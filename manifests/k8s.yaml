@@ -156,6 +156,7 @@ data:
     #   jobs: ["backup"]
     #   cronJobs: ["nightly"]
     #   pods: ["custom-pod"]
+    # excludeRegistries: ["123456789.dkr.ecr.eu-central-1.amazonaws.com", "registry.gitlab.com", "internal.registry/team"]
     requestTimeout: 120      # seconds; set to 0 to disable per-request deadlines
     # failureCooldownMinutes: 1440   # retry failed pushes after one day; set to 0 to disable the cooldown
     # forceReconcileMinutes: 60      # trigger a full resync every hour; set to 0 to disable the periodic resync

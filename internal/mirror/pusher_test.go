@@ -3,6 +3,7 @@ package mirror
 import (
 	"context"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -36,10 +37,61 @@ func TestResolveRepoPathWithMetadata(t *testing.T) {
 }
 
 func TestDryPullOption(t *testing.T) {
-	p := NewPusher(fakeTarget{}, true, true, nil, testr.New(t), nil, 0, 0, false, true)
+	p := NewPusher(fakeTarget{}, true, true, nil, testr.New(t), nil, 0, 0, false, true, nil)
 
 	if !p.DryPull() {
 		t.Fatalf("expected dry pull to be enabled")
+	}
+}
+
+func TestNewPusherConfiguresExcludedRegistries(t *testing.T) {
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, true, []string{"registry.gitlab.com/team/"})
+
+	impl, ok := p.(*pusher)
+	if !ok {
+		t.Fatalf("expected *pusher, got %T", p)
+	}
+
+	want := []string{
+		"registry.gitlab.com/team",
+	}
+	if !reflect.DeepEqual(impl.excludedRegistries, want) {
+		t.Fatalf("unexpected excluded registries: %#v", impl.excludedRegistries)
+	}
+}
+
+func TestMatchExcludedRegistry(t *testing.T) {
+	p := &pusher{excludedRegistries: []string{"example.com", "registry.gitlab.com/group"}}
+
+	if prefix, ok := p.matchExcludedRegistry("example.com/repo:tag"); !ok || prefix != "example.com" {
+		t.Fatalf("expected example.com match, got prefix=%q ok=%v", prefix, ok)
+	}
+	if prefix, ok := p.matchExcludedRegistry("registry.gitlab.com/group/sub/app:latest"); !ok || prefix != "registry.gitlab.com/group" {
+		t.Fatalf("expected registry.gitlab.com/group match, got prefix=%q ok=%v", prefix, ok)
+	}
+	if _, ok := p.matchExcludedRegistry("registry.gitlab.com/group-other/app:latest"); ok {
+		t.Fatalf("expected group-other reference not to match")
+	}
+	if _, ok := p.matchExcludedRegistry("docker.io/library/nginx:latest"); ok {
+		t.Fatalf("expected unrelated image not to match")
+	}
+}
+
+func TestMirrorSkipsExcludedRegistry(t *testing.T) {
+	p := &pusher{
+		target:             fakeTarget{},
+		excludedRegistries: []string{"example.com"},
+		logger:             testr.New(t),
+		keychain:           NewStaticKeychain(nil),
+		pushed:             make(map[string]struct{}),
+		failed:             make(map[string]time.Time),
+	}
+
+	if err := p.Mirror(context.Background(), "example.com/repo:tag", Metadata{}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(p.pushed) != 0 {
+		t.Fatalf("expected no targets to be recorded when skipping, got %d", len(p.pushed))
 	}
 }
 
