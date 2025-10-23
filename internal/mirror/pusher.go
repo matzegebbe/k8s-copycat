@@ -197,11 +197,27 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return nil
 	}
 
+	getDescriptor := func(ref name.Reference) (*remote.Descriptor, context.CancelFunc, error) {
+		descCtx, cancel := p.operationContext(ctx)
+		desc, err := remote.Get(
+			ref,
+			remote.WithContext(descCtx),
+			remote.WithAuthFromKeychain(p.keychain),
+			remote.WithTransport(transport(p.target.Insecure())),
+		)
+		if err != nil {
+			cancel()
+			return nil, func() {}, err
+		}
+		return desc, cancel, nil
+	}
+
+	var desc *remote.Descriptor
+	descCancel := func() {}
+
 	if p.pullByDigest {
 		if tagRef, ok := srcRef.(name.Tag); ok {
-			digestCtx, cancelDigest := p.operationContext(ctx)
-			sourceDesc, digestErr := remote.Get(tagRef, remote.WithContext(digestCtx), remote.WithAuthFromKeychain(p.keychain), remote.WithTransport(transport(p.target.Insecure())))
-			cancelDigest()
+			sourceDesc, cancelSource, digestErr := getDescriptor(tagRef)
 			if digestErr != nil {
 				logRegistryAuthError(log, digestErr, "digest resolution")
 				metrics.RecordPullError(src)
@@ -209,13 +225,23 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			}
 			digestRef, digestParseErr := name.NewDigest(fmt.Sprintf("%s@%s", tagRef.Context().Name(), sourceDesc.Digest.String()), name.WeakValidation)
 			if digestParseErr != nil {
+				cancelSource()
 				metrics.RecordPullError(src)
 				return p.failureResult(target, fmt.Errorf("build digest reference %s: %w", src, digestParseErr))
 			}
 			log.V(1).Info("resolved tag digest", "digest", sourceDesc.Digest.String())
+			cancelSource()
 			pullRef = digestRef
 		}
 	}
+
+	desc, descCancel, err = getDescriptor(pullRef)
+	if err != nil {
+		logRegistryAuthError(log, err, "pull descriptor")
+		metrics.RecordPullError(src)
+		return p.failureResult(target, fmt.Errorf("describe %s: %w", src, err))
+	}
+	defer descCancel()
 
 	log.V(1).Info("starting pull from source")
 	log.V(1).Info("pull progress update", "percentage", "0%")
@@ -230,14 +256,28 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return nil
 	}
 
-	pullCtx, cancelPull := p.operationContext(ctx)
-	defer cancelPull()
+	multiArch := !p.pullByDigest && desc.MediaType.IsIndex()
 
-	img, err := remote.Image(pullRef, remote.WithContext(pullCtx), remote.WithAuthFromKeychain(p.keychain), remote.WithTransport(transport(p.target.Insecure())))
-	if err != nil {
-		logRegistryAuthError(log, err, "pull")
-		metrics.RecordPullError(src)
-		return p.failureResult(target, fmt.Errorf("pull %s: %w", src, err))
+	var (
+		img v1.Image
+		idx v1.ImageIndex
+	)
+
+	if multiArch {
+		idx, err = desc.ImageIndex()
+		if err != nil {
+			logRegistryAuthError(log, err, "pull")
+			metrics.RecordPullError(src)
+			return p.failureResult(target, fmt.Errorf("load index %s: %w", src, err))
+		}
+		log.Info("Detected multi-architecture manifest lists", "mediaType", desc.MediaType, "action", "mirroring all manifests")
+	} else {
+		img, err = desc.Image()
+		if err != nil {
+			logRegistryAuthError(log, err, "pull")
+			metrics.RecordPullError(src)
+			return p.failureResult(target, fmt.Errorf("pull %s: %w", src, err))
+		}
 	}
 
 	metrics.RecordPullSuccess(src)
@@ -245,10 +285,17 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	log.V(1).Info("finished pulling image from source")
 	log.V(1).Info("pull progress update", "percentage", "100%")
 
-	srcDigest, err := img.Digest()
-	if err != nil {
-		metrics.RecordPullError(src)
-		return p.failureResult(target, fmt.Errorf("digest %s: %w", src, err))
+	srcDigest := desc.Digest
+	if srcDigest == (v1.Hash{}) {
+		if multiArch {
+			srcDigest, err = idx.Digest()
+		} else {
+			srcDigest, err = img.Digest()
+		}
+		if err != nil {
+			metrics.RecordPullError(src)
+			return p.failureResult(target, fmt.Errorf("digest %s: %w", src, err))
+		}
 	}
 
 	log.V(1).Info("resolving target registry credentials")
@@ -269,10 +316,10 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	// Skip if image already exists in target registry with the same digest.
 	headCtx, cancelHead := p.operationContext(ctx)
-	desc, headErr := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
+	headDesc, headErr := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
 	cancelHead()
 	if headErr == nil {
-		if desc.Digest == srcDigest {
+		if headDesc.Digest == srcDigest {
 			if p.dryRun {
 				log.Info("image already present at target", "digest", srcDigest.String(), "dryRun", true, "result", "skipped")
 			} else {
@@ -285,17 +332,17 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		case name.Tag:
 			tagStr := targetTag.TagStr()
 			if strings.EqualFold(tagStr, "latest") {
-				log.Info("image already present with different digest for latest tag, updating", "currentDigest", desc.Digest.String(), "sourceDigest", srcDigest.String())
+				log.Info("image already present with different digest for latest tag, updating", "currentDigest", headDesc.Digest.String(), "sourceDigest", srcDigest.String())
 			} else if !p.allowDifferentDigestRepush {
-				err := fmt.Errorf("target image %s exists with digest %s, refusing to overwrite with source digest %s", target, desc.Digest.String(), srcDigest.String())
+				err := fmt.Errorf("target image %s exists with digest %s, refusing to overwrite with source digest %s", target, headDesc.Digest.String(), srcDigest.String())
 				log.Error(err, "digest mismatch detected")
 				metrics.RecordPushError(target)
 				return p.failureResult(target, err)
 			} else {
-				log.Info("image already present with different digest, updating per configuration", "currentDigest", desc.Digest.String(), "sourceDigest", srcDigest.String())
+				log.Info("image already present with different digest, updating per configuration", "currentDigest", headDesc.Digest.String(), "sourceDigest", srcDigest.String())
 			}
 		default:
-			log.Info("image already present with different digest, updating", "currentDigest", desc.Digest.String(), "sourceDigest", srcDigest.String())
+			log.Info("image already present with different digest, updating", "currentDigest", headDesc.Digest.String(), "sourceDigest", srcDigest.String())
 		}
 	} else if te, ok := headErr.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
 		// continue to push
@@ -326,14 +373,25 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		logProgressUpdates(log, "push", updates)
 	}()
 
-	err = remote.Write(
-		targetRef,
-		img,
-		remote.WithAuth(auth),
-		remote.WithContext(pushCtx),
-		remote.WithTransport(transport(p.target.Insecure())),
-		remote.WithProgress(updates),
-	)
+	if multiArch {
+		err = remote.WriteIndex(
+			targetRef,
+			idx,
+			remote.WithAuth(auth),
+			remote.WithContext(pushCtx),
+			remote.WithTransport(transport(p.target.Insecure())),
+			remote.WithProgress(updates),
+		)
+	} else {
+		err = remote.Write(
+			targetRef,
+			img,
+			remote.WithAuth(auth),
+			remote.WithContext(pushCtx),
+			remote.WithTransport(transport(p.target.Insecure())),
+			remote.WithProgress(updates),
+		)
+	}
 	cancelPush()
 	progressWG.Wait()
 	if err != nil {
