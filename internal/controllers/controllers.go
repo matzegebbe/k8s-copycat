@@ -348,15 +348,21 @@ func (r *baseReconciler) mirrorPodSpec(ctx context.Context, ns, podName string, 
 		return 0, nil
 	}
 	images := util.ImagesFromPodSpec(spec)
+	return r.mirrorPodImages(ctx, ns, podName, images)
+}
+
+func (r *baseReconciler) mirrorPodImages(ctx context.Context, ns, podName string, images []util.PodImage) (int, error) {
 	if len(images) == 0 {
 		return 0, nil
 	}
+
 	mirrored := 0
 	for _, img := range images {
 		meta := mirror.Metadata{
 			Namespace:     ns,
 			PodName:       podName,
 			ContainerName: img.ContainerName,
+			ImageID:       img.ImageID,
 		}
 		if err := r.Pusher.Mirror(ctx, img.Image, meta); err != nil {
 			return mirrored, err
@@ -533,7 +539,10 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 	if p.Status.Phase == corev1.PodPending || p.Status.Phase == corev1.PodRunning {
-		return r.processPodSpec(ctx, p.Namespace, p.Name, &p.Spec)
+		images := util.ImagesFromPod(&p)
+		if _, err := r.mirrorPodImages(ctx, p.Namespace, p.Name, images); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	return ctrl.Result{}, nil
 }

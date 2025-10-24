@@ -37,6 +37,8 @@ type Metadata struct {
 	Namespace     string
 	PodName       string
 	ContainerName string
+	Architecture  string
+	ImageID       string
 }
 
 type pusher struct {
@@ -140,16 +142,17 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	if log.GetSink() == nil {
 		log = p.logger
 	}
-	log = log.WithValues(
+	baseLog := log.WithValues(
 		"source", src,
 		"namespace", meta.Namespace,
 	)
 	if meta.PodName != "" {
-		log = log.WithValues("pod", meta.PodName)
+		baseLog = baseLog.WithValues("pod", meta.PodName)
 	}
 	if meta.ContainerName != "" {
-		log = log.WithValues("container", meta.ContainerName)
+		baseLog = baseLog.WithValues("container", meta.ContainerName)
 	}
+	log = baseLog
 
 	if excluded, ok := p.matchExcludedRegistry(src); ok {
 		log.Info(
@@ -176,40 +179,48 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	if p.target.Insecure() {
 		opts = append(opts, name.Insecure)
 	}
-	switch r := srcRef.(type) {
-	case name.Tag:
-		target = fmt.Sprintf("%s/%s:%s", p.target.Registry(), repo, r.TagStr())
-		targetRef, err = name.NewTag(target, opts...)
-	case name.Digest:
-		stripped := src
-		if idx := strings.Index(stripped, "@"); idx > 0 {
-			stripped = stripped[:idx]
+	buildTarget := func(repo string) (string, name.Reference, error) {
+		switch r := srcRef.(type) {
+		case name.Tag:
+			ref := fmt.Sprintf("%s/%s:%s", p.target.Registry(), repo, r.TagStr())
+			tgt, tgtErr := name.NewTag(ref, opts...)
+			return ref, tgt, tgtErr
+		case name.Digest:
+			stripped := src
+			if idx := strings.Index(stripped, "@"); idx > 0 {
+				stripped = stripped[:idx]
+			}
+			// Try to honour the original tag when the source reference included both tag and digest.
+			if tagRef, tagErr := name.NewTag(stripped, name.WeakValidation); tagErr == nil {
+				ref := fmt.Sprintf("%s/%s:%s", p.target.Registry(), repo, tagRef.TagStr())
+				tgt, tgtErr := name.NewTag(ref, opts...)
+				return ref, tgt, tgtErr
+			}
+			ref := fmt.Sprintf("%s/%s@%s", p.target.Registry(), repo, r.DigestStr())
+			tgt, tgtErr := name.NewDigest(ref, opts...)
+			return ref, tgt, tgtErr
+		default:
+			return "", nil, fmt.Errorf("unsupported reference type %T", srcRef)
 		}
-		// Try to honour the original tag when the source reference included both tag and digest.
-		if tagRef, tagErr := name.NewTag(stripped, name.WeakValidation); tagErr == nil {
-			target = fmt.Sprintf("%s/%s:%s", p.target.Registry(), repo, tagRef.TagStr())
-			targetRef, err = name.NewTag(target, opts...)
-		} else {
-			target = fmt.Sprintf("%s/%s@%s", p.target.Registry(), repo, r.DigestStr())
-			targetRef, err = name.NewDigest(target, opts...)
-		}
-	default:
-		return fmt.Errorf("unsupported reference type %T", srcRef)
 	}
+
+	target, targetRef, err = buildTarget(repo)
 	if err != nil {
 		return fmt.Errorf("parse target: %w", err)
 	}
 
-	log = log.WithValues("target", target)
+	procLog := baseLog.WithValues("target", target)
 
-	log.V(1).Info("resolved target reference", "reference", target)
+	procLog.V(1).Info("resolved target reference", "reference", target)
 
-	if skip, err := p.beginProcessing(target, log); err != nil {
-		log.Error(err, "unable to begin processing")
+	if skip, err := p.beginProcessing(target, procLog); err != nil {
+		procLog.Error(err, "unable to begin processing")
 		return err
 	} else if skip {
 		return nil
 	}
+
+	log = baseLog.WithValues("target", target)
 
 	getDescriptor := func(ref name.Reference) (*remote.Descriptor, context.CancelFunc, error) {
 		descCtx, cancel := p.operationContext(ctx)
@@ -230,22 +241,32 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	descCancel := func() {}
 
 	if p.pullByDigest {
-		if tagRef, ok := srcRef.(name.Tag); ok {
-			sourceDesc, cancelSource, digestErr := getDescriptor(tagRef)
-			if digestErr != nil {
-				logRegistryAuthError(log, digestErr, "digest resolution")
-				metrics.RecordPullError(src)
-				return p.failureResult(target, fmt.Errorf("resolve digest %s: %w", src, digestErr))
+		if trimmed := strings.TrimSpace(meta.ImageID); trimmed != "" {
+			if digestRef, digestErr := name.NewDigest(trimmed, name.WeakValidation); digestErr != nil {
+				log.Error(digestErr, "failed to parse digest from pod imageID", "imageID", trimmed)
+			} else {
+				log.V(1).Info("using pod imageID digest for pull", "imageID", trimmed)
+				pullRef = digestRef
 			}
-			digestRef, digestParseErr := name.NewDigest(fmt.Sprintf("%s@%s", tagRef.Context().Name(), sourceDesc.Digest.String()), name.WeakValidation)
-			if digestParseErr != nil {
+		}
+		if _, ok := pullRef.(name.Digest); !ok {
+			if tagRef, ok := srcRef.(name.Tag); ok {
+				sourceDesc, cancelSource, digestErr := getDescriptor(tagRef)
+				if digestErr != nil {
+					logRegistryAuthError(log, digestErr, "digest resolution")
+					metrics.RecordPullError(src)
+					return p.failureResult(target, fmt.Errorf("resolve digest %s: %w", src, digestErr))
+				}
+				digestRef, digestParseErr := name.NewDigest(fmt.Sprintf("%s@%s", tagRef.Context().Name(), sourceDesc.Digest.String()), name.WeakValidation)
+				if digestParseErr != nil {
+					cancelSource()
+					metrics.RecordPullError(src)
+					return p.failureResult(target, fmt.Errorf("build digest reference %s: %w", src, digestParseErr))
+				}
+				log.V(1).Info("resolved tag digest", "digest", sourceDesc.Digest.String())
 				cancelSource()
-				metrics.RecordPullError(src)
-				return p.failureResult(target, fmt.Errorf("build digest reference %s: %w", src, digestParseErr))
+				pullRef = digestRef
 			}
-			log.V(1).Info("resolved tag digest", "digest", sourceDesc.Digest.String())
-			cancelSource()
-			pullRef = digestRef
 		}
 	}
 
@@ -270,7 +291,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return nil
 	}
 
-	multiArch := desc.MediaType.IsIndex() && !p.pullByDigest
+	multiArch := desc.MediaType.IsIndex()
 
 	var (
 		img               v1.Image
@@ -325,6 +346,32 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	log.V(1).Info("finished pulling image from source")
 	log.V(1).Info("pull progress update", "percentage", "100%")
+
+	if arch := resolveArchitecture(multiArch, idx, img); arch != "" {
+		meta.Architecture = arch
+		newRepo := p.resolveRepoPath(srcRepo, meta)
+		if newRepo != repo {
+			newTarget, newTargetRef, buildErr := buildTarget(newRepo)
+			if buildErr != nil {
+				metrics.RecordPullError(src)
+				return p.failureResult(target, fmt.Errorf("parse target %s: %w", newRepo, buildErr))
+			}
+
+			reassignedLog := baseLog.WithValues("target", newTarget)
+			skip, reassignErr := p.reassignProcessing(target, newTarget, reassignedLog)
+			if reassignErr != nil {
+				return reassignErr
+			}
+			if skip {
+				return nil
+			}
+
+			repo = newRepo
+			target = newTarget
+			targetRef = newTargetRef
+			log = reassignedLog
+		}
+	}
 
 	var srcDigest v1.Hash
 	if multiArch {
@@ -642,6 +689,52 @@ func (p *pusher) beginProcessing(target string, log logr.Logger) (bool, error) {
 	return false, nil
 }
 
+func (p *pusher) reassignProcessing(oldTarget, newTarget string, log logr.Logger) (bool, error) {
+	if oldTarget == newTarget {
+		return false, nil
+	}
+
+	log.V(1).Info("updating resolved target", "previous", oldTarget)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.failureCooldown > 0 {
+		if lastFailure, ok := p.failed[newTarget]; ok {
+			retryAt := lastFailure.Add(p.failureCooldown)
+			now := p.now()
+			if now.Before(retryAt) {
+				delete(p.pushed, oldTarget)
+				err := &RetryError{Cause: ErrInCooldown, RetryAt: retryAt}
+				log.Error(err, "skipping image due to previous failure", "retryAt", retryAt)
+				return false, err
+			}
+			delete(p.failed, newTarget)
+		}
+		if lastFailure, ok := p.failed[oldTarget]; ok {
+			p.failed[newTarget] = lastFailure
+			delete(p.failed, oldTarget)
+		}
+	}
+
+	if _, exists := p.pushed[newTarget]; exists {
+		delete(p.pushed, oldTarget)
+		if p.dryRun {
+			log.Info("image already processed during current run", "result", "skipped", "dryRun", true)
+		} else {
+			log.V(1).Info("image already processed during current run", "result", "skipped")
+		}
+		return true, nil
+	}
+
+	if _, exists := p.pushed[oldTarget]; exists {
+		delete(p.pushed, oldTarget)
+		p.pushed[newTarget] = struct{}{}
+	}
+
+	return false, nil
+}
+
 func (p *pusher) failureResult(target string, cause error) error {
 	now := p.now()
 	retryAt := now.Add(p.failureCooldown)
@@ -660,6 +753,46 @@ func (p *pusher) failureResult(target string, cause error) error {
 		return &RetryError{Cause: cause, RetryAt: retryAt}
 	}
 	return cause
+}
+
+func resolveArchitecture(multiArch bool, idx v1.ImageIndex, img v1.Image) string {
+	if multiArch {
+		if idx != nil {
+			if manifest, err := idx.IndexManifest(); err == nil {
+				seen := make(map[string]struct{})
+				for _, m := range manifest.Manifests {
+					if m.Platform == nil {
+						continue
+					}
+					arch := strings.TrimSpace(m.Platform.Architecture)
+					if arch == "" {
+						continue
+					}
+					seen[arch] = struct{}{}
+				}
+				if len(seen) > 0 {
+					vals := make([]string, 0, len(seen))
+					for arch := range seen {
+						vals = append(vals, arch)
+					}
+					sort.Strings(vals)
+					return strings.Join(vals, "-")
+				}
+			}
+		}
+		return "multiarch"
+	}
+
+	if img != nil {
+		if cfg, err := img.ConfigFile(); err == nil && cfg != nil {
+			arch := strings.TrimSpace(cfg.Architecture)
+			if arch != "" {
+				return arch
+			}
+		}
+	}
+
+	return ""
 }
 
 func (p *pusher) resolveRepoPath(srcRepo string, meta Metadata) string {
@@ -684,6 +817,7 @@ func expandRepoPrefix(prefix string, meta Metadata) string {
 		"$namespace", meta.Namespace,
 		"$podname", meta.PodName,
 		"$container_name", meta.ContainerName,
+		"$arch", meta.Architecture,
 	)
 	expanded := replacer.Replace(prefix)
 	expanded = strings.TrimSpace(expanded)

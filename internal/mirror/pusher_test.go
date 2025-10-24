@@ -36,6 +36,18 @@ func TestResolveRepoPathWithMetadata(t *testing.T) {
 	}
 }
 
+func TestResolveRepoPathWithArchitectureMetadata(t *testing.T) {
+	p := &pusher{
+		target:    fakeTarget{prefix: "$arch/$namespace"},
+		transform: util.CleanRepoName,
+	}
+
+	repo := p.resolveRepoPath("", Metadata{Namespace: "prod", Architecture: "arm64"})
+	if repo != "arm64/prod/library/unknown" {
+		t.Fatalf("expected architecture placeholder to be expanded, got %q", repo)
+	}
+}
+
 func TestDryPullOption(t *testing.T) {
 	p := NewPusher(fakeTarget{}, true, true, nil, testr.New(t), nil, 0, 0, false, true, nil)
 
@@ -119,6 +131,18 @@ func TestExpandRepoPrefixSkipsEmptySegments(t *testing.T) {
 			pref: "  $namespace / $container_name  ",
 			meta: Metadata{Namespace: "Team", ContainerName: "App"},
 			want: "Team/App",
+		},
+		{
+			name: "arch placeholder omitted when empty",
+			pref: "$arch/$namespace",
+			meta: Metadata{Namespace: "default"},
+			want: "default",
+		},
+		{
+			name: "arch placeholder applied",
+			pref: "$arch/$namespace",
+			meta: Metadata{Namespace: "default", Architecture: "amd64"},
+			want: "amd64/default",
 		},
 	}
 

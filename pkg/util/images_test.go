@@ -58,6 +58,77 @@ func TestCleanRepoNameStripsInvalidCharactersAndLength(t *testing.T) {
 	}
 }
 
+func TestImagesFromPodAnnotatesImageIDs(t *testing.T) {
+	pod := &corev1.Pod{
+		Spec: corev1.PodSpec{
+			InitContainers: []corev1.Container{{
+				Name:  "init-db",
+				Image: "busybox:1",
+			}},
+			Containers: []corev1.Container{{
+				Name:  "app",
+				Image: "nginx:1",
+			}},
+			EphemeralContainers: []corev1.EphemeralContainer{{
+				EphemeralContainerCommon: corev1.EphemeralContainerCommon{
+					Name:  "debug",
+					Image: "alpine:3",
+				},
+			}},
+		},
+		Status: corev1.PodStatus{
+			InitContainerStatuses: []corev1.ContainerStatus{{
+				Name:    "init-db",
+				ImageID: "docker://registry.example.com/busybox@sha256:abc",
+			}},
+			ContainerStatuses: []corev1.ContainerStatus{{
+				Name:    "app",
+				ImageID: "docker-pullable://registry.example.com/nginx@sha256:def",
+			}},
+			EphemeralContainerStatuses: []corev1.ContainerStatus{{
+				Name:    "debug",
+				ImageID: "registry.example.com/alpine@sha256:ghi",
+			}},
+		},
+	}
+
+	images := ImagesFromPod(pod)
+	if len(images) != 3 {
+		t.Fatalf("expected 3 images, got %d", len(images))
+	}
+
+	expected := map[string]string{
+		"init-db": "registry.example.com/busybox@sha256:abc",
+		"app":     "registry.example.com/nginx@sha256:def",
+		"debug":   "registry.example.com/alpine@sha256:ghi",
+	}
+
+	for _, img := range images {
+		want, ok := expected[img.ContainerName]
+		if !ok {
+			t.Fatalf("unexpected container %q", img.ContainerName)
+		}
+		if img.ImageID != want {
+			t.Fatalf("container %q: expected imageID %q, got %q", img.ContainerName, want, img.ImageID)
+		}
+	}
+}
+
+func TestNormalizeImageIDHandlesPrefixes(t *testing.T) {
+	cases := map[string]string{
+		"docker://registry.example.com/repo@sha256:123":          "registry.example.com/repo@sha256:123",
+		"docker-pullable://registry.example.com/repo@sha256:123": "registry.example.com/repo@sha256:123",
+		"  registry.example.com/repo@sha256:123  ":               "registry.example.com/repo@sha256:123",
+		"": "",
+	}
+
+	for input, want := range cases {
+		if got := normalizeImageID(input); got != want {
+			t.Fatalf("normalizeImageID(%q): expected %q, got %q", input, want, got)
+		}
+	}
+}
+
 func TestCleanRepoNameTruncatesLongRepositories(t *testing.T) {
 	long := strings.Repeat("a", maxRepoNameLength+42)
 	cleaned := CleanRepoName(long)

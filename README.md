@@ -49,7 +49,21 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `METRICS_ADDR`: bind address for the Prometheus metrics endpoint (default `:8080`)
 - Optional `pathMap` in the config file rewrites repository paths before pushing
 
-When `DIGEST_PULL` remains disabled, copycat automatically detects multi-architecture manifest lists, logs the detection, and mirrors all referenced platform images.
+### How `digestPull` changes the mirroring flow
+
+Whether `digestPull` is enabled determines how copycat interacts with multi-architecture images:
+
+- **`digestPull: true` / `DIGEST_PULL=true`** – copycat resolves the tag to its immutable digest. When reconciling Pods it prefers the digest reported by the kubelet in the container `ImageID`, guaranteeing that the mirrored artifact matches what actually runs on the node, even across architectures. When copycat only has a PodSpec (for example, from a Deployment) it falls back to resolving the digest from the registry.
+- **`digestPull: false` / default** – copycat keeps the original tag reference. When it encounters a manifest list (for example, `alpine:3.19`), it downloads the entire multi-architecture index and uploads every referenced platform image to the target registry.
+
+#### Alpine example
+
+Assume a Pod references `docker.io/library/alpine:3.19`:
+
+- With `digestPull=false`, copycat mirrors the manifest list and pushes layers for all available architectures (currently `386`, `amd64`, `arm64`, `ppc64le`, `riscv64`, and `s390x`) so the target registry can serve any of them.
+- With `digestPull=true`, copycat mirrors the exact digest reported in the Pod’s status (for example, `docker.io/library/alpine@sha256:...`). If the Pod runs on an `arm64` node, copycat mirrors the `arm64` manifest even when the controller is running on `amd64`.
+
+This difference is important when sizing storage in the mirror registry or when you rely on the new `$arch` prefix placeholder described below.
 
 ### Selecting watched workloads
 
@@ -69,10 +83,19 @@ runtime. The following tokens are supported:
 - `$namespace` — Namespace of the workload or pod referencing the image
 - `$podname` — Name of the owning resource (or pod when available)
 - `$container_name` — Name of the container that uses the image
+- `$arch` — Architecture of the mirrored image. When `digestPull` is enabled this is the architecture of the selected manifest (for example, `amd64`). When mirroring a manifest list, the placeholder expands to a hyphen-separated list of all mirrored architectures (for example, `386-amd64-arm64-ppc64le-riscv64-s390x`). If copycat cannot determine the architecture it leaves the segment blank.
 
 For example, setting `repoPrefix: "$namespace/$podname"` ensures that the
 resulting target repositories are unique across namespaces, even when multiple
 workloads reference the same source image.
+
+To separate images per architecture, you can combine placeholders:
+
+```yaml
+repoPrefix: "$arch/$namespace"
+```
+
+With the example `alpine:3.19` workload shown above, this produces target repositories such as `amd64/default/alpine` when `digestPull=true`, or `386-amd64-arm64-ppc64le-riscv64-s390x/default/alpine` when `digestPull=false` and the manifest list contains all of those variants.
 
 ### Applying an ECR lifecycle policy
 
