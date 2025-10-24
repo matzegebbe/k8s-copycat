@@ -270,21 +270,32 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return nil
 	}
 
-	multiArch := !p.pullByDigest && desc.MediaType.IsIndex()
+	multiArch := desc.MediaType.IsIndex() && !p.pullByDigest
 
 	var (
-		img v1.Image
-		idx v1.ImageIndex
+		img               v1.Image
+		idx               v1.ImageIndex
+		selectedFromIndex bool
 	)
 
-	if multiArch {
-		idx, err = desc.ImageIndex()
-		if err != nil {
-			logRegistryAuthError(log, err, "pull")
-			metrics.RecordPullError(src)
-			return p.failureResult(target, fmt.Errorf("load index %s: %w", src, err))
+	if desc.MediaType.IsIndex() {
+		if multiArch {
+			idx, err = desc.ImageIndex()
+			if err != nil {
+				logRegistryAuthError(log, err, "pull")
+				metrics.RecordPullError(src)
+				return p.failureResult(target, fmt.Errorf("load index %s: %w", src, err))
+			}
+			log.Info("Detected multi-architecture manifest lists", "mediaType", desc.MediaType, "action", "mirroring all manifests")
+		} else {
+			img, err = desc.Image()
+			if err != nil {
+				logRegistryAuthError(log, err, "pull")
+				metrics.RecordPullError(src)
+				return p.failureResult(target, fmt.Errorf("pull %s: %w", src, err))
+			}
+			selectedFromIndex = true
 		}
-		log.Info("Detected multi-architecture manifest lists", "mediaType", desc.MediaType, "action", "mirroring all manifests")
 	} else {
 		img, err = desc.Image()
 		if err != nil {
@@ -294,22 +305,44 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		}
 	}
 
+	if selectedFromIndex {
+		if cfg, cfgErr := img.ConfigFile(); cfgErr == nil && cfg != nil {
+			log.Info(
+				"Digest pull enabled; mirroring platform-specific manifest from index",
+				"mediaType", desc.MediaType,
+				"os", cfg.OS,
+				"architecture", cfg.Architecture,
+			)
+		} else {
+			log.Info(
+				"Digest pull enabled; mirroring platform-specific manifest from index",
+				"mediaType", desc.MediaType,
+			)
+		}
+	}
+
 	metrics.RecordPullSuccess(src)
 
 	log.V(1).Info("finished pulling image from source")
 	log.V(1).Info("pull progress update", "percentage", "100%")
 
-	srcDigest := desc.Digest
-	if srcDigest == (v1.Hash{}) {
-		if multiArch {
-			srcDigest, err = idx.Digest()
-		} else {
-			srcDigest, err = img.Digest()
-		}
-		if err != nil {
-			metrics.RecordPullError(src)
-			return p.failureResult(target, fmt.Errorf("digest %s: %w", src, err))
-		}
+	var srcDigest v1.Hash
+	if multiArch {
+		srcDigest, err = idx.Digest()
+	} else {
+		srcDigest, err = img.Digest()
+	}
+	if err != nil {
+		metrics.RecordPullError(src)
+		return p.failureResult(target, fmt.Errorf("digest %s: %w", src, err))
+	}
+
+	if selectedFromIndex && desc.Digest != (v1.Hash{}) && desc.Digest != srcDigest {
+		log.V(1).Info(
+			"resolved platform-specific digest from multi-architecture index",
+			"indexDigest", desc.Digest.String(),
+			"selectedDigest", srcDigest.String(),
+		)
 	}
 
 	log.V(1).Info("resolving target registry credentials")
@@ -413,7 +446,36 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		metrics.RecordPushError(target)
 		return p.failureResult(target, fmt.Errorf("push %s: %w", target, err))
 	}
-	log.Info("finished pushing image")
+
+	targetDigest := srcDigest
+	verifyCtx, cancelVerify := p.operationContext(ctx)
+	verifyDesc, verifyErr := remote.Head(
+		targetRef,
+		remote.WithAuth(auth),
+		remote.WithContext(verifyCtx),
+		remote.WithTransport(transport(p.target.Insecure())),
+	)
+	cancelVerify()
+	switch {
+	case verifyErr == nil:
+		targetDigest = verifyDesc.Digest
+		if targetDigest == srcDigest {
+			log.Info("finished pushing image", "digest", targetDigest.String())
+		} else {
+			log.Info(
+				"finished pushing image with different digest at target",
+				"sourceDigest", srcDigest.String(),
+				"targetDigest", targetDigest.String(),
+			)
+		}
+	case errors.Is(verifyErr, context.DeadlineExceeded):
+		log.V(1).Info("unable to confirm target digest after push", "reason", "timed out")
+		log.Info("finished pushing image", "digest", targetDigest.String())
+	case verifyErr != nil:
+		log.V(1).Info("unable to confirm target digest after push", "error", verifyErr)
+		log.Info("finished pushing image", "digest", targetDigest.String())
+	}
+
 	metrics.RecordPushSuccess(target)
 	return nil
 }
