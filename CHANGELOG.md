@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.3.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.6...v0.3.0) (2025-10-24)
+
+
+### Features
+
+* honor pod imageid for digest pulls ([967940a](https://github.com/matzegebbe/k8s-copycat/commit/967940a0388bd540dcd87bce2a274bc880ae5710))
+* mirror digest pulls using pod image ids ([a63dc13](https://github.com/matzegebbe/k8s-copycat/commit/a63dc1392845f2205be9480521af50330b2a7ad2))
+
+
+### Bug Fixes
+
+* **mirror:** honor digest pull for manifest lists ([708bda2](https://github.com/matzegebbe/k8s-copycat/commit/708bda28e8036e83e936b01b826ff2e3fe9b27d0))
+
+
+### Continuous Integration
+
+* gate docker publish on commit tag ([08ca7ea](https://github.com/matzegebbe/k8s-copycat/commit/08ca7ea366ba1655ab81810cbc3fad347d54459d))
+
+
+### Miscellaneous
+
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([95de82a](https://github.com/matzegebbe/k8s-copycat/commit/95de82a18d322dcf4ddb91ec2401ee8ba4d0d109))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr from 1.50.7 to 1.51.0 ([56f764b](https://github.com/matzegebbe/k8s-copycat/commit/56f764bd9fd66d9bc00661cf958a2f9f1879e953))
+* **deps:** bump the go-patch group with 2 updates ([36f6cb6](https://github.com/matzegebbe/k8s-copycat/commit/36f6cb67b07e20820c3299d2a0a1d29138dcb4c2))
+* **deps:** bump the go-patch group with 2 updates ([c47df17](https://github.com/matzegebbe/k8s-copycat/commit/c47df17f719def87cea2acd5022560eceec6145b))
+
 ## [0.2.6](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.5...v0.2.6) (2025-10-23)
 
 
