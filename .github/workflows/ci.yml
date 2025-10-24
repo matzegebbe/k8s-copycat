@@ -52,7 +52,10 @@ jobs:
           echo "happy k8s-copycat 😺"
 
   docker-publish:
-    if: github.event_name == 'push' && github.ref_type == 'branch'
+    if: |
+      github.event_name == 'push' &&
+      github.ref_type == 'branch' &&
+      contains(github.event.head_commit.message, '[publish-image]')
     needs:
       - smoke-test
     permissions:
