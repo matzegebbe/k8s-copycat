@@ -12,6 +12,7 @@ import (
 type PodImage struct {
 	Image         string
 	ContainerName string
+	ImageID       string
 }
 
 func ImagesFromPodSpec(spec *corev1.PodSpec) []PodImage {
@@ -42,6 +43,55 @@ func ImagesFromPodSpec(spec *corev1.PodSpec) []PodImage {
 	}
 
 	return out
+}
+
+func ImagesFromPod(pod *corev1.Pod) []PodImage {
+	if pod == nil {
+		return nil
+	}
+
+	images := ImagesFromPodSpec(&pod.Spec)
+	if len(images) == 0 {
+		return nil
+	}
+
+	statusByName := make(map[string]string, len(pod.Status.ContainerStatuses)+len(pod.Status.InitContainerStatuses)+len(pod.Status.EphemeralContainerStatuses))
+	collect := func(statuses []corev1.ContainerStatus) {
+		for _, st := range statuses {
+			name := strings.TrimSpace(st.Name)
+			if name == "" {
+				continue
+			}
+			id := normalizeImageID(st.ImageID)
+			if id == "" {
+				continue
+			}
+			statusByName[name] = id
+		}
+	}
+
+	collect(pod.Status.InitContainerStatuses)
+	collect(pod.Status.ContainerStatuses)
+	collect(pod.Status.EphemeralContainerStatuses)
+
+	for i := range images {
+		if id, ok := statusByName[images[i].ContainerName]; ok {
+			images[i].ImageID = id
+		}
+	}
+
+	return images
+}
+
+func normalizeImageID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+	if idx := strings.Index(id, "://"); idx >= 0 {
+		id = id[idx+3:]
+	}
+	return strings.TrimSpace(id)
 }
 
 const maxRepoNameLength = 256
