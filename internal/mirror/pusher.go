@@ -38,7 +38,42 @@ type Metadata struct {
 	PodName       string
 	ContainerName string
 	Architecture  string
+	OS            string
 	ImageID       string
+}
+
+func normalizeImageID(imageID string) string {
+	trimmed := strings.TrimSpace(imageID)
+	if trimmed == "" {
+		return ""
+	}
+	if idx := strings.Index(trimmed, "://"); idx >= 0 {
+		trimmed = trimmed[idx+3:]
+	}
+	return strings.TrimSpace(trimmed)
+}
+
+func digestReferenceFromImageID(imageID string, src name.Reference) (string, name.Digest, error) {
+	normalized := normalizeImageID(imageID)
+	if normalized == "" {
+		return "", name.Digest{}, fmt.Errorf("empty imageID")
+	}
+	if strings.Contains(normalized, "@") {
+		ref, err := name.NewDigest(normalized, name.WeakValidation)
+		if err != nil {
+			return "", name.Digest{}, err
+		}
+		return ref.DigestStr(), ref, nil
+	}
+	if _, err := v1.NewHash(normalized); err != nil {
+		return "", name.Digest{}, err
+	}
+	contextName := src.Context().Name()
+	ref, err := name.NewDigest(fmt.Sprintf("%s@%s", contextName, normalized), name.WeakValidation)
+	if err != nil {
+		return "", name.Digest{}, err
+	}
+	return normalized, ref, nil
 }
 
 type pusher struct {
@@ -155,7 +190,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	log = baseLog
 
 	if excluded, ok := p.matchExcludedRegistry(src); ok {
-		log.Info(
+		log.V(1).Info(
 			"source matches excluded registry prefix, skipping",
 			"excludedPrefix", excluded,
 			"result", "skipped",
@@ -175,6 +210,8 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	var target string
 	var targetRef name.Reference
 	pullRef := srcRef
+	var podDigestStr string
+	havePodDigest := false
 	opts := []name.Option{name.WeakValidation}
 	if p.target.Insecure() {
 		opts = append(opts, name.Insecure)
@@ -209,9 +246,37 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return fmt.Errorf("parse target: %w", err)
 	}
 
-	procLog := baseLog.WithValues("target", target)
+	log = baseLog.WithValues("target", target)
+	procLog := log
 
 	procLog.V(1).Info("resolved target reference", "reference", target)
+
+	sourceIsDigest := false
+	if _, ok := srcRef.(name.Digest); ok {
+		sourceIsDigest = true
+	}
+
+	if p.pullByDigest {
+		normalizedID := normalizeImageID(meta.ImageID)
+		if normalizedID != "" {
+			if digestStr, digestRef, digestErr := digestReferenceFromImageID(normalizedID, srcRef); digestErr != nil {
+				log.V(1).Error(digestErr, "failed to parse digest from pod imageID", "imageID", normalizedID)
+			} else {
+				log.V(1).Info("using pod imageID digest for pull", "imageID", normalizedID)
+				pullRef = digestRef
+				podDigestStr = digestStr
+				havePodDigest = true
+			}
+		}
+	}
+
+	if p.pullByDigest && !havePodDigest && !sourceIsDigest {
+		procLog.V(1).Info(
+			"digest pull enabled but pod imageID digest is not available yet, skipping until it is reported",
+			"result", "skipped",
+		)
+		return nil
+	}
 
 	if skip, err := p.beginProcessing(target, procLog); err != nil {
 		procLog.Error(err, "unable to begin processing")
@@ -220,16 +285,61 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return nil
 	}
 
-	log = baseLog.WithValues("target", target)
+	username, password, err := p.target.BasicAuth(ctx)
+	if err != nil {
+		metrics.RecordPushError(target)
+		return p.failureResult(target, fmt.Errorf("auth: %w", err))
+	}
 
-	getDescriptor := func(ref name.Reference) (*remote.Descriptor, context.CancelFunc, error) {
+	if username != "" || password != "" {
+		log.V(1).Info("using provided target registry credentials")
+	} else {
+		log.V(1).Info("no target registry credentials provided, using anonymous access")
+	}
+
+	auth := &authn.Basic{Username: username, Password: password}
+
+	if p.pullByDigest && havePodDigest {
+		var digestRef name.Reference
+		if existingDigest, ok := targetRef.(name.Digest); ok && strings.EqualFold(existingDigest.DigestStr(), podDigestStr) {
+			digestRef = existingDigest
+		} else {
+			digestName := fmt.Sprintf("%s@%s", targetRef.Context().Name(), podDigestStr)
+			targetDigestRef, digestErr := name.NewDigest(digestName, opts...)
+			if digestErr != nil {
+				log.V(1).Error(digestErr, "unable to build target digest reference", "digest", podDigestStr)
+			} else {
+				digestRef = targetDigestRef
+			}
+		}
+
+		if digestRef != nil {
+			headCtx, cancelHead := p.operationContext(ctx)
+			_, headErr := remote.Head(digestRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
+			cancelHead()
+			if headErr == nil {
+				log.V(1).Info("image digest already present at target", "digest", podDigestStr, "result", "skipped")
+				return nil
+			}
+			if te, ok := headErr.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
+				// continue to pull and push
+			} else if headErr != nil {
+				log.V(1).Error(headErr, "unable to confirm existing digest", "digest", podDigestStr)
+			}
+		}
+	}
+
+	getDescriptor := func(ref name.Reference, platform *v1.Platform) (*remote.Descriptor, context.CancelFunc, error) {
 		descCtx, cancel := p.operationContext(ctx)
-		desc, err := remote.Get(
-			ref,
+		opts := []remote.Option{
 			remote.WithContext(descCtx),
 			remote.WithAuthFromKeychain(p.keychain),
 			remote.WithTransport(transport(p.target.Insecure())),
-		)
+		}
+		if platform != nil {
+			opts = append(opts, remote.WithPlatform(*platform))
+		}
+		desc, err := remote.Get(ref, opts...)
 		if err != nil {
 			cancel()
 			return nil, func() {}, err
@@ -240,37 +350,8 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	var desc *remote.Descriptor
 	descCancel := func() {}
 
-	if p.pullByDigest {
-		if trimmed := strings.TrimSpace(meta.ImageID); trimmed != "" {
-			if digestRef, digestErr := name.NewDigest(trimmed, name.WeakValidation); digestErr != nil {
-				log.Error(digestErr, "failed to parse digest from pod imageID", "imageID", trimmed)
-			} else {
-				log.V(1).Info("using pod imageID digest for pull", "imageID", trimmed)
-				pullRef = digestRef
-			}
-		}
-		if _, ok := pullRef.(name.Digest); !ok {
-			if tagRef, ok := srcRef.(name.Tag); ok {
-				sourceDesc, cancelSource, digestErr := getDescriptor(tagRef)
-				if digestErr != nil {
-					logRegistryAuthError(log, digestErr, "digest resolution")
-					metrics.RecordPullError(src)
-					return p.failureResult(target, fmt.Errorf("resolve digest %s: %w", src, digestErr))
-				}
-				digestRef, digestParseErr := name.NewDigest(fmt.Sprintf("%s@%s", tagRef.Context().Name(), sourceDesc.Digest.String()), name.WeakValidation)
-				if digestParseErr != nil {
-					cancelSource()
-					metrics.RecordPullError(src)
-					return p.failureResult(target, fmt.Errorf("build digest reference %s: %w", src, digestParseErr))
-				}
-				log.V(1).Info("resolved tag digest", "digest", sourceDesc.Digest.String())
-				cancelSource()
-				pullRef = digestRef
-			}
-		}
-	}
-
-	desc, descCancel, err = getDescriptor(pullRef)
+	platform := platformFromMetadata(meta)
+	desc, descCancel, err = getDescriptor(pullRef, platform)
 	if err != nil {
 		logRegistryAuthError(log, err, "pull descriptor")
 		metrics.RecordPullError(src)
@@ -282,7 +363,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	log.V(1).Info("pull progress update", "percentage", "0%")
 
 	if p.dryPull {
-		log.Info(
+		log.V(1).Info(
 			"dry pull: skipping source registry fetch",
 			"result", "skipped",
 			"dryPull", true,
@@ -291,7 +372,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return nil
 	}
 
-	multiArch := desc.MediaType.IsIndex()
+	pushIndex := false
 
 	var (
 		img               v1.Image
@@ -299,43 +380,54 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		selectedFromIndex bool
 	)
 
-	if desc.MediaType.IsIndex() {
-		if multiArch {
-			idx, err = desc.ImageIndex()
-			if err != nil {
-				logRegistryAuthError(log, err, "pull")
-				metrics.RecordPullError(src)
-				return p.failureResult(target, fmt.Errorf("load index %s: %w", src, err))
-			}
-			log.Info("Detected multi-architecture manifest lists", "mediaType", desc.MediaType, "action", "mirroring all manifests")
-		} else {
-			img, err = desc.Image()
-			if err != nil {
+	switch {
+	case desc.MediaType.IsIndex() && !p.pullByDigest:
+		idx, err = desc.ImageIndex()
+		if err != nil {
+			logRegistryAuthError(log, err, "pull")
+			metrics.RecordPullError(src)
+			return p.failureResult(target, fmt.Errorf("load index %s: %w", src, err))
+		}
+		pushIndex = true
+		log.V(1).Info("Detected multi-architecture manifest list", "mediaType", desc.MediaType, "action", "mirroring all manifests")
+	default:
+		img, err = desc.Image()
+		if err != nil {
+			if desc.MediaType.IsIndex() {
+				idx, idxErr := desc.ImageIndex()
+				if idxErr != nil {
+					logRegistryAuthError(log, idxErr, "pull")
+					metrics.RecordPullError(src)
+					return p.failureResult(target, fmt.Errorf("load index %s: %w", src, idxErr))
+				}
+				var selectErr error
+				img, selectErr = imageFromIndex(idx, platform)
+				if selectErr != nil {
+					logRegistryAuthError(log, selectErr, "pull")
+					metrics.RecordPullError(src)
+					return p.failureResult(target, fmt.Errorf("resolve platform image %s: %w", src, selectErr))
+				}
+				selectedFromIndex = true
+			} else {
 				logRegistryAuthError(log, err, "pull")
 				metrics.RecordPullError(src)
 				return p.failureResult(target, fmt.Errorf("pull %s: %w", src, err))
 			}
+		} else if desc.MediaType.IsIndex() {
 			selectedFromIndex = true
-		}
-	} else {
-		img, err = desc.Image()
-		if err != nil {
-			logRegistryAuthError(log, err, "pull")
-			metrics.RecordPullError(src)
-			return p.failureResult(target, fmt.Errorf("pull %s: %w", src, err))
 		}
 	}
 
 	if selectedFromIndex {
 		if cfg, cfgErr := img.ConfigFile(); cfgErr == nil && cfg != nil {
-			log.Info(
+			log.V(1).Info(
 				"Digest pull enabled; mirroring platform-specific manifest from index",
 				"mediaType", desc.MediaType,
 				"os", cfg.OS,
 				"architecture", cfg.Architecture,
 			)
 		} else {
-			log.Info(
+			log.V(1).Info(
 				"Digest pull enabled; mirroring platform-specific manifest from index",
 				"mediaType", desc.MediaType,
 			)
@@ -347,7 +439,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	log.V(1).Info("finished pulling image from source")
 	log.V(1).Info("pull progress update", "percentage", "100%")
 
-	if arch := resolveArchitecture(multiArch, idx, img); arch != "" {
+	if arch := resolveArchitecture(pushIndex, idx, img); arch != "" {
 		meta.Architecture = arch
 		newRepo := p.resolveRepoPath(srcRepo, meta)
 		if newRepo != repo {
@@ -374,7 +466,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	}
 
 	var srcDigest v1.Hash
-	if multiArch {
+	if pushIndex {
 		srcDigest, err = idx.Digest()
 	} else {
 		srcDigest, err = img.Digest()
@@ -391,22 +483,6 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			"selectedDigest", srcDigest.String(),
 		)
 	}
-
-	log.V(1).Info("resolving target registry credentials")
-
-	username, password, err := p.target.BasicAuth(ctx)
-	if err != nil {
-		metrics.RecordPushError(target)
-		return p.failureResult(target, fmt.Errorf("auth: %w", err))
-	}
-
-	if username != "" || password != "" {
-		log.V(1).Info("using provided target registry credentials")
-	} else {
-		log.V(1).Info("no target registry credentials provided, using anonymous access")
-	}
-
-	auth := &authn.Basic{Username: username, Password: password}
 
 	// Skip if image already exists in target registry with the same digest.
 	headCtx, cancelHead := p.operationContext(ctx)
@@ -452,7 +528,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	}
 
 	if p.dryRun {
-		log.Info("dry run: skipping push", "result", "skipped", "dryRun", true)
+		log.V(1).Info("dry run: skipping push", "result", "skipped", "dryRun", true)
 		return nil
 	}
 	log.Info("pushing image to target", "digest", srcDigest.String())
@@ -467,7 +543,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		logProgressUpdates(log, "push", updates)
 	}()
 
-	if multiArch {
+	if pushIndex {
 		err = remote.WriteIndex(
 			targetRef,
 			idx,
@@ -678,7 +754,7 @@ func (p *pusher) beginProcessing(target string, log logr.Logger) (bool, error) {
 
 	if _, exists := p.pushed[target]; exists {
 		if p.dryRun {
-			log.Info("image already processed during current run", "result", "skipped", "dryRun", true)
+			log.V(1).Info("image already processed during current run", "result", "skipped", "dryRun", true)
 		} else {
 			log.V(1).Info("image already processed during current run", "result", "skipped")
 		}
@@ -720,7 +796,7 @@ func (p *pusher) reassignProcessing(oldTarget, newTarget string, log logr.Logger
 	if _, exists := p.pushed[newTarget]; exists {
 		delete(p.pushed, oldTarget)
 		if p.dryRun {
-			log.Info("image already processed during current run", "result", "skipped", "dryRun", true)
+			log.V(1).Info("image already processed during current run", "result", "skipped", "dryRun", true)
 		} else {
 			log.V(1).Info("image already processed during current run", "result", "skipped")
 		}
@@ -755,8 +831,60 @@ func (p *pusher) failureResult(target string, cause error) error {
 	return cause
 }
 
-func resolveArchitecture(multiArch bool, idx v1.ImageIndex, img v1.Image) string {
-	if multiArch {
+func platformFromMetadata(meta Metadata) *v1.Platform {
+	arch := strings.TrimSpace(meta.Architecture)
+	os := strings.TrimSpace(meta.OS)
+	if arch == "" && os == "" {
+		return nil
+	}
+	if arch == "" {
+		return nil
+	}
+	if os == "" {
+		os = "linux"
+	}
+	return &v1.Platform{Architecture: arch, OS: os}
+}
+
+func imageFromIndex(idx v1.ImageIndex, platform *v1.Platform) (v1.Image, error) {
+	if idx == nil {
+		return nil, fmt.Errorf("image index is nil")
+	}
+	manifest, err := idx.IndexManifest()
+	if err != nil {
+		return nil, err
+	}
+	if manifest == nil || len(manifest.Manifests) == 0 {
+		return nil, fmt.Errorf("image index has no manifests")
+	}
+
+	selected := &manifest.Manifests[0]
+	if platform != nil {
+		desiredArch := strings.TrimSpace(platform.Architecture)
+		desiredOS := strings.TrimSpace(platform.OS)
+		for i := range manifest.Manifests {
+			candidate := &manifest.Manifests[i]
+			if candidate.Platform == nil {
+				continue
+			}
+			arch := strings.TrimSpace(candidate.Platform.Architecture)
+			os := strings.TrimSpace(candidate.Platform.OS)
+			if desiredArch != "" && !strings.EqualFold(arch, desiredArch) {
+				continue
+			}
+			if desiredOS != "" && !strings.EqualFold(os, desiredOS) {
+				continue
+			}
+			selected = candidate
+			break
+		}
+	}
+
+	return idx.Image(selected.Digest)
+}
+
+func resolveArchitecture(useIndex bool, idx v1.ImageIndex, img v1.Image) string {
+	if useIndex {
 		if idx != nil {
 			if manifest, err := idx.IndexManifest(); err == nil {
 				seen := make(map[string]struct{})
