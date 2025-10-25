@@ -1,0 +1,139 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k8s-copycat
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dind-pusher
+  namespace: k8s-copycat
+  labels:
+    app: dind-pusher
+spec:
+  # Needs privileged for dockerd in DinD
+  securityContext:
+    runAsUser: 0
+  containers:
+    - name: dind
+      image: docker:26-dind
+      securityContext:
+        privileged: true
+      resources:
+        requests:
+          memory: "256Mi"
+          cpu: "500m"
+        limits:
+          memory: "512Mi"
+          cpu: "1000m"
+      env:
+        - name: DOCKER_TLS_CERTDIR
+          value: "" # disable TLS in DinD
+      args:
+        - "--host=tcp://0.0.0.0:2375"
+        - "--insecure-registry=registry.test.svc.cluster.local:5000"
+      ports:
+        - containerPort: 2375
+      volumeMounts:
+        - name: dind-storage
+          mountPath: /var/lib/docker
+    - name: docker-cli
+      image: docker:26-cli
+      resources:
+        requests:
+          memory: "128Mi"
+          cpu: "250m"
+        limits:
+          memory: "256Mi"
+          cpu: "500m"
+      env:
+        - name: DOCKER_HOST
+          value: tcp://localhost:2375
+      command: ["sh","-c","sleep 3650d"]
+  volumes:
+    - name: dind-storage
+      emptyDir: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: k8s-copycat
+  labels:
+      app: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      containers:
+        - name: registry
+          image: registry:2
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_HTTP_ADDR
+              value: :5000
+            - name: REGISTRY_LOG_LEVEL
+              value: warn
+          volumeMounts:
+            - name: registry-data
+              mountPath: /var/lib/registry
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+      volumes:
+        - name: registry-data
+          emptyDir: {}
+---
+# registry.test.svc.cluster.local:5000
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: k8s-copycat
+  labels:
+    app: registry
+spec:
+  selector:
+    app: registry
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+      protocol: TCP
+  type: ClusterIP
+---
+# curl -s http://registry.k8s-copycat.svc.cluster.local:5000/v2/jitesoft/alpine/tags/list | jq
+# curl -s -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.manifest.v1+json' http://registry.k8s-copycat.svc.cluster.local:5000/v2/jitesoft/alpine/manifests/3.22.2 | jq
+# curl -s -H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' "http://registry.k8s-copycat.svc.cluster.local:5000/v2/jitesoft/alpine/manifests/${amd64_manifest}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: alpine-test
+  namespace: k8s-copycat
+spec:
+  containers:
+  - name: alpine
+    image: quay.io/jitesoft/alpine:3.22.2
+    command: ["/bin/sh", "-c"]
+    args:
+      - apk add --no-cache curl jq &&
+        echo "curl and jq installed... going to sleep 3600" &&
+        sleep 3600
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "10m"
+      limits:
+        memory: "128Mi"
+        cpu: "100m"
