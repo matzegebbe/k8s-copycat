@@ -181,6 +181,18 @@ registryCredentials:
     tokenEnv: GHCR_TOKEN
 ```
 
+Credentials can be supplied directly in the configuration file via `username`,
+`password`, or `token`, but using environment variables (referenced through
+`*Env` fields) is recommended for secrets. When a token is provided it is sent as
+an authentication bearer token; otherwise basic authentication is used.
+
+Each entry can optionally declare `registryAliases` to mirror credentials across
+multiple hostnames. Copycat lowercases every alias and applies the same
+authenticator to each of them. Wildcards such as `*.docker.io` are supported and
+are matched using Go's [`filepath.Match`](https://pkg.go.dev/path/filepath#Match)
+rules, enabling a single configuration block to authenticate Docker Hub's
+various hostnames or custom registry sharding schemes.
+
 `requestTimeout` limits how long copycat waits for each registry pull and push. When the timeout elapses, the current operation is aborted so the controller can retry later. Setting the value to `0` (or omitting it) disables the per-request deadline and lets copycat rely on the underlying client timeouts.
 
 When `failureCooldownMinutes` is set to `0`, copycat retries failed pushes immediately without recording cooldown state. Omit the field to use the default of 24 hours.
@@ -201,18 +213,6 @@ Both endpoints return JSON responses describing the action that was taken. Reque
 Set `digestPull: true` (or the `DIGEST_PULL` environment variable) to pin mirrored images to the digest that was active when the controller observed the workload. Copycat resolves the tag to its digest first and then pulls using that immutable reference, reducing the risk of race conditions when upstream registries re-tag images.
 
 By default, copycat overwrites existing image tags at the target registry even when the digest differs from the source so the mirrored repository always matches what is currently running. Enable the safeguard by setting `allowDifferentDigestRepush: false` (or `ALLOW_DIFFERENT_DIGEST_REPUSH=false`) when you want copycat to refuse replacing tags that already exist with a different digest. The protection is always skipped for the conventional `latest` tag to maintain the previous behavior for mutable tags.
-
-Credentials can be supplied directly in the configuration file via `username`,
-`password`, or `token`, but using environment variables (referenced through
-`*Env` fields) is recommended for secrets. When a token is provided it is sent as
-an authentication bearer token; otherwise basic authentication is used.
-
-Each entry can optionally declare `registryAliases` to mirror credentials across
-multiple hostnames. Copycat lowercases every alias and applies the same
-authenticator to each of them. Wildcards such as `*.docker.io` are supported and
-are matched using Go's [`filepath.Match`](https://pkg.go.dev/path/filepath#Match)
-rules, enabling a single configuration block to authenticate Docker Hub's
-various hostnames or custom registry sharding schemes.
 
 ## Build Container
 
