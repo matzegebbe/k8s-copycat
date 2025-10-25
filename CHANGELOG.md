@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/matzegebbe/k8s-copycat/compare/v0.3.1...v0.3.2) (2025-10-25)
+
+
+### Bug Fixes
+
+* **mirror:** normalize digest lookup and document flow ([4cedab6](https://github.com/matzegebbe/k8s-copycat/commit/4cedab638224dc450126d359ac94b259d0f7863b))
+* normalize digest lookup and document mirroring flow ([5052079](https://github.com/matzegebbe/k8s-copycat/commit/50520793319cb68a260cdebd1f8f236f25645a88))
+
 ## [0.3.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.3.0...v0.3.1) (2025-10-25)
 
 
