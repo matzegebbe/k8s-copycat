@@ -36,6 +36,22 @@ func TestResolveRepoPathWithMetadata(t *testing.T) {
 	}
 }
 
+func TestNormalizeImageIDStripsRuntimePrefixes(t *testing.T) {
+	cases := map[string]string{
+		"docker-pullable://docker.io/library/nginx@sha256:abc": "docker.io/library/nginx@sha256:abc",
+		"containerd://sha256:abcdef":                           "sha256:abcdef",
+		"  cri-o://quay.io/app@sha256:def  ":                   "quay.io/app@sha256:def",
+		"nerdctl://registry.example.com/repo@sha256:123":       "registry.example.com/repo@sha256:123",
+		"": "",
+	}
+
+	for input, want := range cases {
+		if got := normalizeImageID(input); got != want {
+			t.Fatalf("normalizeImageID(%q)=%q, want %q", input, got, want)
+		}
+	}
+}
+
 func TestResolveRepoPathWithArchitectureMetadata(t *testing.T) {
 	p := &pusher{
 		target:    fakeTarget{prefix: "$arch/$namespace"},
@@ -104,6 +120,26 @@ func TestMirrorSkipsExcludedRegistry(t *testing.T) {
 	}
 	if len(p.pushed) != 0 {
 		t.Fatalf("expected no targets to be recorded when skipping, got %d", len(p.pushed))
+	}
+}
+
+func TestMirrorSkipsWithoutPodDigestWhenDigestPullEnabled(t *testing.T) {
+	p := &pusher{
+		target:         fakeTarget{prefix: "$namespace"},
+		transform:      util.CleanRepoName,
+		pullByDigest:   true,
+		logger:         testr.New(t),
+		keychain:       NewStaticKeychain(nil),
+		pushed:         make(map[string]struct{}),
+		failed:         make(map[string]time.Time),
+		requestTimeout: 0,
+	}
+
+	if err := p.Mirror(context.Background(), "docker.io/library/nginx:1.28", Metadata{Namespace: "default"}); err != nil {
+		t.Fatalf("expected skip without error, got %v", err)
+	}
+	if len(p.pushed) != 0 {
+		t.Fatalf("expected target not to be marked as processed when skipping")
 	}
 }
 
