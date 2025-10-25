@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.3.0...v0.3.1) (2025-10-25)
+
+
+### Refactoring
+
+* rely on configured registry aliases ([e6c6690](https://github.com/matzegebbe/k8s-copycat/commit/e6c6690ff3e6610fe8ccbe97563383d7485e7df5))
+* rely on configured registry aliases ([535676d](https://github.com/matzegebbe/k8s-copycat/commit/535676d48e7bb1f7e2157b200ca7a82d7689b76a))
+
 ## [0.3.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.2.6...v0.3.0) (2025-10-24)
 
 
