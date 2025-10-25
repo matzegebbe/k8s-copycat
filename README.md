@@ -168,9 +168,16 @@ failureCooldownMinutes: 60   # retry failed pushes after one hour; set to 0 to d
 forceReconcileMinutes: 30    # rescan all watched resources every 30 minutes; set to 0 to disable the periodic resync
 registryCredentials:
   - registry: registry-1.docker.io
+    registryAliases:
+      - index.docker.io
+      - docker.io
+      - "*.docker.io"
     usernameEnv: DOCKERHUB_USERNAME
     passwordEnv: DOCKERHUB_PASSWORD
   - registry: ghcr.io
+    registryAliases:
+      - "*.ghcr.io"
+      - docker.pkg.github.com
     tokenEnv: GHCR_TOKEN
 ```
 
@@ -199,6 +206,13 @@ Credentials can be supplied directly in the configuration file via `username`,
 `password`, or `token`, but using environment variables (referenced through
 `*Env` fields) is recommended for secrets. When a token is provided it is sent as
 an authentication bearer token; otherwise basic authentication is used.
+
+Each entry can optionally declare `registryAliases` to mirror credentials across
+multiple hostnames. Copycat lowercases every alias and applies the same
+authenticator to each of them. Wildcards such as `*.docker.io` are supported and
+are matched using Go's [`filepath.Match`](https://pkg.go.dev/path/filepath#Match)
+rules, enabling a single configuration block to authenticate Docker Hub's
+various hostnames or custom registry sharding schemes.
 
 ## Build Container
 

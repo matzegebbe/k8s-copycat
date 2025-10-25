@@ -32,13 +32,14 @@ type Docker struct {
 // the *_env fields. When both direct values and env-based overrides are provided,
 // the environment variables take precedence at runtime.
 type RegistryCredential struct {
-	Registry    string `yaml:"registry"`
-	Username    string `yaml:"username"`
-	Password    string `yaml:"password"`
-	UsernameEnv string `yaml:"usernameEnv"`
-	PasswordEnv string `yaml:"passwordEnv"`
-	Token       string `yaml:"token"`
-	TokenEnv    string `yaml:"tokenEnv"`
+	Registry        string   `yaml:"registry"`
+	RegistryAliases []string `yaml:"registryAliases"`
+	Username        string   `yaml:"username"`
+	Password        string   `yaml:"password"`
+	UsernameEnv     string   `yaml:"usernameEnv"`
+	PasswordEnv     string   `yaml:"passwordEnv"`
+	Token           string   `yaml:"token"`
+	TokenEnv        string   `yaml:"tokenEnv"`
 }
 
 type Config struct {

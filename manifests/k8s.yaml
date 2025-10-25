@@ -186,7 +186,9 @@ data:
       insecure: true
     #registryCredentials:
     #  - registry: registry-1.docker.io
+    #    registryAliases: ["index.docker.io", "docker.io", "*.docker.io"]
     #    usernameEnv: DOCKERHUB_USERNAME
     #    passwordEnv: DOCKERHUB_PASSWORD
     #  - registry: ghcr.io
+    #    registryAliases: ["*.ghcr.io", "docker.pkg.github.com"]
     #    tokenEnv: GHCR_TOKEN

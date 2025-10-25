@@ -328,8 +328,8 @@ func buildKeychainFromConfig(creds []config.RegistryCredential) authn.Keychain {
 	}
 	auths := make(map[string]authn.Authenticator, len(creds))
 	for _, c := range creds {
-		registry := strings.TrimSpace(c.Registry)
-		if registry == "" {
+		aliases := registryAliases(c)
+		if len(aliases) == 0 {
 			continue
 		}
 		username := strings.TrimSpace(c.Username)
@@ -351,12 +351,50 @@ func buildKeychainFromConfig(creds []config.RegistryCredential) authn.Keychain {
 			}
 		}
 
+		var authenticator authn.Authenticator
 		switch {
 		case token != "":
-			auths[registry] = authn.FromConfig(authn.AuthConfig{RegistryToken: token})
+			authenticator = authn.FromConfig(authn.AuthConfig{RegistryToken: token})
 		case username != "" || password != "":
-			auths[registry] = &authn.Basic{Username: username, Password: password}
+			authenticator = &authn.Basic{Username: username, Password: password}
+		}
+		if authenticator == nil {
+			continue
+		}
+		for _, registry := range aliases {
+			auths[registry] = authenticator
 		}
 	}
 	return mirror.NewStaticKeychain(auths)
+}
+
+func registryAliases(cred config.RegistryCredential) []string {
+	trimmed := strings.ToLower(strings.TrimSpace(cred.Registry))
+	if trimmed == "" {
+		return nil
+	}
+
+	seen := make(map[string]struct{})
+	add := func(value string) {
+		v := strings.ToLower(strings.TrimSpace(value))
+		if v == "" {
+			return
+		}
+		seen[v] = struct{}{}
+	}
+
+	add(trimmed)
+
+	for _, alias := range cred.RegistryAliases {
+		add(alias)
+	}
+
+	out := make([]string, 0, len(seen))
+	for alias := range seen {
+		out = append(out, alias)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
