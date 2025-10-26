@@ -65,9 +65,9 @@ Assume a Pod references `docker.io/library/alpine:3.19`:
 
 This difference is important when sizing storage in the mirror registry or when you rely on the new `$arch` prefix placeholder described below.
 
-## Troubleshooting pull and push failures while iterating digests
+## Troubleshooting pull and push failures while iterating references
 
-When you mirror or verify multiple digests in succession, transient errors should not block progress. If a particular manifest fails to pull or push—for example, due to missing credentials or an attestation entry that does not contain runnable image data—move on to the next manifest in the list and continue processing. Copycat follows this pattern internally: failures are recorded and retried later without preventing other objects from being mirrored. You can emulate that workflow during manual checks by skipping problematic entries and circling back once credentials or permissions have been corrected.
+When you mirror or verify a batch of image references—tags, digests, manifest lists, or attestations—transient errors should not block progress. If a particular reference fails to pull or push for any reason (missing credentials, an attestation without runnable image data, or a registry hiccup), move on to the next entry and continue processing. Copycat follows this pattern internally: failures are recorded and retried later without preventing other objects from being mirrored. You can emulate that workflow during manual checks by skipping problematic entries and circling back once credentials or permissions have been corrected.
 
 ### Selecting watched workloads
 
