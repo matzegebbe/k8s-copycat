@@ -210,7 +210,7 @@ Both endpoints return JSON responses describing the action that was taken. Reque
 
 ### Guaranteeing digest consistency
 
-Set `digestPull: true` (or the `DIGEST_PULL` environment variable) to pin mirrored images to the digest that was active when the controller observed the workload. Copycat resolves the tag to its digest first and then pulls using that immutable reference, reducing the risk of race conditions when upstream registries re-tag images.
+Set `digestPull: true` (or the `DIGEST_PULL` environment variable) to pin mirrored images to the digest that was active when the controller observed the workload. Copycat resolves the tag to its digest first and then pulls using that immutable reference, reducing the risk of race conditions when upstream registries re-tag images. See [docs/digest-verification.md](docs/digest-verification.md) for a step-by-step walkthrough of verifying digests with `skopeo` and relating them to Kubernetes `imageID` values.
 
 By default, copycat overwrites existing image tags at the target registry even when the digest differs from the source so the mirrored repository always matches what is currently running. Enable the safeguard by setting `allowDifferentDigestRepush: false` (or `ALLOW_DIFFERENT_DIGEST_REPUSH=false`) when you want copycat to refuse replacing tags that already exist with a different digest. The protection is always skipped for the conventional `latest` tag to maintain the previous behavior for mutable tags.
 

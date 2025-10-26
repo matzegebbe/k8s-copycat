@@ -1,0 +1,48 @@
+# Verifying Image Digests with `skopeo`
+
+This guide shows how to confirm the digest of an image, understand the values reported for multi-architecture versus single-architecture images, and relate those values to the `imageID` that Kubernetes records for running containers.
+
+## Checking a tag's digest
+
+`skopeo` can inspect remote registries without pulling layers locally. Use the `inspect` command to resolve a tag to a digest:
+
+```bash
+skopeo inspect docker://docker.io/library/alpine:3.19 --format '{{.Digest}}'
+```
+
+The digest reported here corresponds to the manifest object addressed by the tag. For multi-architecture images this will usually be the manifest list (an OCI image index), while single-architecture images will resolve directly to an image manifest.
+
+## Exploring multi-architecture manifest lists
+
+When a tag points at a manifest list, you can inspect the per-platform entries by querying the raw JSON and piping the result through `jq`:
+
+```bash
+skopeo inspect --raw docker://docker.io/library/alpine:3.19 \
+  | jq '.manifests[] | {platform, digest}'
+```
+
+Each item contains a digest that identifies the platform-specific image manifest. These digests are the values the kubelet reports in `.status.containerStatuses[].imageID` when your node pulls the matching architecture.
+
+To focus on a single platform, combine `--format` with `--raw` to fetch the manifest and compute its digest:
+
+```bash
+skopeo inspect --raw docker://docker.io/library/alpine@sha256:<per-platform-digest> \
+  | sha256sum
+```
+
+The output hash corresponds to the digest displayed in the manifest list entry because OCI digests are the SHA-256 of the canonical JSON representation of the manifest.
+
+## Single-architecture images
+
+If a tag references only one architecture, `skopeo inspect --format '{{.Digest}}'` yields the same digest that appears when you inspect the manifest directly. There is no manifest list wrapper, so the tag digest and the image digest are identical.
+
+## Understanding Kubernetes `imageID`
+
+Kubernetes surfaces the exact object the container runtime pulled via the `imageID` field:
+
+```bash
+kubectl get pod <name> -n <namespace> \
+  -o jsonpath='{range .status.containerStatuses[*]}{@.name}={@.imageID}{"\n"}{end}'
+```
+
+The runtime reports the resolved image reference, including the digest of the manifest it stored locally. On multi-architecture images this will match one of the platform entries from the manifest list above; on single-architecture images it matches the tag digest directly. This value is what copycat uses when `digestPull` is enabled, ensuring the mirrored artifact aligns exactly with what the kubelet executed.

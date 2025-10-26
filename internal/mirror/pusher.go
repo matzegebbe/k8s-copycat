@@ -25,6 +25,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+var (
+	remoteGetFunc        = remote.Get
+	remoteHeadFunc       = remote.Head
+	remoteWriteFunc      = remote.Write
+	remoteWriteIndexFunc = remote.WriteIndex
+)
+
 type Pusher interface {
 	Mirror(ctx context.Context, sourceImage string, meta Metadata) error
 	DryRun() bool
@@ -74,6 +81,23 @@ func digestReferenceFromImageID(imageID string, src name.Reference) (string, nam
 		return "", name.Digest{}, err
 	}
 	return normalized, ref, nil
+}
+
+func pullReferenceFromMetadata(pullByDigest bool, normalizedImageID string, src name.Reference) (name.Reference, string, bool, error) {
+	if !pullByDigest {
+		return src, "", false, nil
+	}
+
+	if normalizedImageID == "" {
+		return src, "", false, nil
+	}
+
+	digestStr, digestRef, err := digestReferenceFromImageID(normalizedImageID, src)
+	if err != nil {
+		return src, "", false, err
+	}
+
+	return digestRef, digestStr, true, nil
 }
 
 type pusher struct {
@@ -256,18 +280,12 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		sourceIsDigest = true
 	}
 
-	if p.pullByDigest {
-		normalizedID := normalizeImageID(meta.ImageID)
-		if normalizedID != "" {
-			if digestStr, digestRef, digestErr := digestReferenceFromImageID(normalizedID, srcRef); digestErr != nil {
-				log.V(1).Error(digestErr, "failed to parse digest from pod imageID", "imageID", normalizedID)
-			} else {
-				log.V(1).Info("using pod imageID digest for pull", "imageID", normalizedID)
-				pullRef = digestRef
-				podDigestStr = digestStr
-				havePodDigest = true
-			}
-		}
+	normalizedID := normalizeImageID(meta.ImageID)
+	pullRef, podDigestStr, havePodDigest, pullRefErr := pullReferenceFromMetadata(p.pullByDigest, normalizedID, srcRef)
+	if pullRefErr != nil {
+		log.V(1).Error(pullRefErr, "failed to parse digest from pod imageID", "imageID", normalizedID)
+	} else if havePodDigest {
+		log.V(1).Info("using pod imageID digest for pull", "imageID", normalizedID)
 	}
 
 	if p.pullByDigest && !havePodDigest && !sourceIsDigest {
@@ -315,7 +333,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 		if digestRef != nil {
 			headCtx, cancelHead := p.operationContext(ctx)
-			_, headErr := remote.Head(digestRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
+			_, headErr := remoteHeadFunc(digestRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
 			cancelHead()
 			if headErr == nil {
 				log.V(1).Info("image digest already present at target", "digest", podDigestStr, "result", "skipped")
@@ -339,7 +357,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		if platform != nil {
 			opts = append(opts, remote.WithPlatform(*platform))
 		}
-		desc, err := remote.Get(ref, opts...)
+		desc, err := remoteGetFunc(ref, opts...)
 		if err != nil {
 			cancel()
 			return nil, func() {}, err
@@ -486,7 +504,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	// Skip if image already exists in target registry with the same digest.
 	headCtx, cancelHead := p.operationContext(ctx)
-	headDesc, headErr := remote.Head(targetRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
+	headDesc, headErr := remoteHeadFunc(targetRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
 	cancelHead()
 	if headErr == nil {
 		if headDesc.Digest == srcDigest {
@@ -544,7 +562,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	}()
 
 	if pushIndex {
-		err = remote.WriteIndex(
+		err = remoteWriteIndexFunc(
 			targetRef,
 			idx,
 			remote.WithAuth(auth),
@@ -553,7 +571,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			remote.WithProgress(updates),
 		)
 	} else {
-		err = remote.Write(
+		err = remoteWriteFunc(
 			targetRef,
 			img,
 			remote.WithAuth(auth),
@@ -572,7 +590,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	targetDigest := srcDigest
 	verifyCtx, cancelVerify := p.operationContext(ctx)
-	verifyDesc, verifyErr := remote.Head(
+	verifyDesc, verifyErr := remoteHeadFunc(
 		targetRef,
 		remote.WithAuth(auth),
 		remote.WithContext(verifyCtx),

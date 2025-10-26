@@ -2,12 +2,19 @@ package mirror
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr/funcr"
 	"github.com/go-logr/logr/testr"
+	"github.com/google/go-containerregistry/pkg/name"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	remotetransport "github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
@@ -49,6 +56,109 @@ func TestNormalizeImageIDStripsRuntimePrefixes(t *testing.T) {
 		if got := normalizeImageID(input); got != want {
 			t.Fatalf("normalizeImageID(%q)=%q, want %q", input, got, want)
 		}
+	}
+}
+
+func TestDigestReferenceFromImageIDUsesPodDigest(t *testing.T) {
+	srcRef, err := name.ParseReference("docker.io/library/alpine:3.19", name.WeakValidation)
+	if err != nil {
+		t.Fatalf("unexpected error parsing source reference: %v", err)
+	}
+
+	digestStr, digestRef, err := digestReferenceFromImageID(
+		"docker.io/library/alpine@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		srcRef,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error resolving digest reference: %v", err)
+	}
+	if digestStr != "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
+		t.Fatalf("expected digest string sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef, got %q", digestStr)
+	}
+	if digestRef.Context().Name() != "index.docker.io/library/alpine" {
+		t.Fatalf("expected context index.docker.io/library/alpine, got %q", digestRef.Context().Name())
+	}
+	if digestRef.Identifier() != "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
+		t.Fatalf("expected digest identifier sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef, got %q", digestRef.Identifier())
+	}
+}
+
+func TestDigestReferenceFromImageIDInfersContextForBareDigests(t *testing.T) {
+	srcRef, err := name.ParseReference("ghcr.io/org/app:1.2.3", name.WeakValidation)
+	if err != nil {
+		t.Fatalf("unexpected error parsing source reference: %v", err)
+	}
+
+	digestStr, digestRef, err := digestReferenceFromImageID(
+		"sha256:111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000",
+		srcRef,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error resolving digest reference: %v", err)
+	}
+	if digestStr != "sha256:111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000" {
+		t.Fatalf("expected digest string sha256:111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000, got %q", digestStr)
+	}
+	if got := digestRef.Context().Name(); got != "ghcr.io/org/app" {
+		t.Fatalf("expected context ghcr.io/org/app, got %q", got)
+	}
+	if digestRef.Identifier() != "sha256:111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000" {
+		t.Fatalf("expected digest identifier sha256:111122223333444455556666777788889999aaaabbbbccccddddeeeeffff0000, got %q", digestRef.Identifier())
+	}
+}
+
+func TestPullReferenceFromMetadataUsesPodDigest(t *testing.T) {
+	srcRef, err := name.ParseReference("docker.io/library/alpine:3.19", name.WeakValidation)
+	if err != nil {
+		t.Fatalf("unexpected error parsing source reference: %v", err)
+	}
+
+	normalized := "docker.io/library/alpine@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	pullRef, digestStr, haveDigest, helperErr := pullReferenceFromMetadata(true, normalized, srcRef)
+	if helperErr != nil {
+		t.Fatalf("unexpected helper error: %v", helperErr)
+	}
+	if !haveDigest {
+		t.Fatalf("expected helper to report pod digest availability")
+	}
+	if digestStr != "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" {
+		t.Fatalf("unexpected digest string %q", digestStr)
+	}
+	if pullRef.Identifier() != digestStr {
+		t.Fatalf("expected pull reference to use digest, got %q", pullRef.Identifier())
+	}
+}
+
+func TestPullReferenceFromMetadataFallsBackWhenDisabled(t *testing.T) {
+	srcRef, err := name.ParseReference("docker.io/library/nginx:1.28", name.WeakValidation)
+	if err != nil {
+		t.Fatalf("unexpected error parsing source reference: %v", err)
+	}
+
+	pullRef, digestStr, haveDigest, helperErr := pullReferenceFromMetadata(false, "docker.io/library/nginx@sha256:abc", srcRef)
+	if helperErr != nil {
+		t.Fatalf("unexpected helper error: %v", helperErr)
+	}
+	if haveDigest {
+		t.Fatalf("expected helper not to report digest when disabled")
+	}
+	if digestStr != "" {
+		t.Fatalf("expected empty digest string when digest pull disabled")
+	}
+	if pullRef.String() != srcRef.String() {
+		t.Fatalf("expected pull reference to remain unchanged, got %q", pullRef.String())
+	}
+}
+
+func TestPullReferenceFromMetadataPropagatesErrors(t *testing.T) {
+	srcRef, err := name.ParseReference("docker.io/library/nginx:1.28", name.WeakValidation)
+	if err != nil {
+		t.Fatalf("unexpected error parsing source reference: %v", err)
+	}
+
+	_, _, _, helperErr := pullReferenceFromMetadata(true, "not-a-digest", srcRef)
+	if helperErr == nil {
+		t.Fatalf("expected helper to propagate parsing error")
 	}
 }
 
@@ -140,6 +250,62 @@ func TestMirrorSkipsWithoutPodDigestWhenDigestPullEnabled(t *testing.T) {
 	}
 	if len(p.pushed) != 0 {
 		t.Fatalf("expected target not to be marked as processed when skipping")
+	}
+}
+
+func TestMirrorSkipsLoggingPushWhenDigestAlreadyPresent(t *testing.T) {
+        digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	normalized := fmt.Sprintf("docker.io/library/alpine@%s", digest)
+
+	var headRefs []string
+	var headMu sync.Mutex
+	originalHead := remoteHeadFunc
+	remoteHeadFunc = func(ref name.Reference, options ...remote.Option) (*v1.Descriptor, error) {
+		headMu.Lock()
+		headRefs = append(headRefs, ref.String())
+		headMu.Unlock()
+		return &v1.Descriptor{Digest: v1.Hash{Algorithm: "sha256", Hex: strings.TrimPrefix(digest, "sha256:")}}, nil
+	}
+	t.Cleanup(func() { remoteHeadFunc = originalHead })
+
+	var logMu sync.Mutex
+	var logMessages []string
+	logger := funcr.New(func(prefix, args string) {
+		logMu.Lock()
+		defer logMu.Unlock()
+		logMessages = append(logMessages, prefix+args)
+	}, funcr.Options{Verbosity: 10})
+
+	p := &pusher{
+		target:       fakeTarget{prefix: "$namespace"},
+		transform:    util.CleanRepoName,
+		pullByDigest: true,
+		logger:       logger,
+		keychain:     NewStaticKeychain(nil),
+		pushed:       make(map[string]struct{}),
+		failed:       make(map[string]time.Time),
+	}
+
+	meta := Metadata{Namespace: "default", ImageID: normalized}
+	if err := p.Mirror(context.Background(), "docker.io/library/alpine:3.19", meta); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	headMu.Lock()
+	defer headMu.Unlock()
+	if len(headRefs) != 1 {
+		t.Fatalf("expected exactly one HEAD request, got %d", len(headRefs))
+	}
+	if !strings.HasSuffix(headRefs[0], "@"+digest) {
+		t.Fatalf("expected digest HEAD to target %s, got %s", digest, headRefs[0])
+	}
+
+	logMu.Lock()
+	defer logMu.Unlock()
+	for _, msg := range logMessages {
+		if strings.Contains(msg, "pushing image to target") {
+			t.Fatalf("unexpected push log message recorded: %s", msg)
+		}
 	}
 }
 
