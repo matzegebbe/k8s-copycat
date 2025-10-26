@@ -356,7 +356,10 @@ func (r *baseReconciler) mirrorPodImages(ctx context.Context, ns, podName string
 		return 0, nil
 	}
 
+	log := ctrl.LoggerFrom(ctx)
 	mirrored := 0
+	var firstErr error
+	var retryErr *mirror.RetryError
 	for _, img := range images {
 		meta := mirror.Metadata{
 			Namespace:     ns,
@@ -365,11 +368,24 @@ func (r *baseReconciler) mirrorPodImages(ctx context.Context, ns, podName string
 			ImageID:       img.ImageID,
 		}
 		if err := r.Pusher.Mirror(ctx, img.Image, meta); err != nil {
-			return mirrored, err
+			log.Error(err, "unable to mirror image", "image", img.Image, "container", img.ContainerName)
+			if firstErr == nil {
+				firstErr = err
+			}
+			if retryErr == nil {
+				var candidate *mirror.RetryError
+				if errors.As(err, &candidate) {
+					retryErr = candidate
+				}
+			}
+			continue
 		}
 		mirrored++
 	}
-	return mirrored, nil
+	if retryErr != nil {
+		return mirrored, retryErr
+	}
+	return mirrored, firstErr
 }
 
 func (r *baseReconciler) processPodSpec(ctx context.Context, ns, podName string, spec *corev1.PodSpec) (ctrl.Result, error) {

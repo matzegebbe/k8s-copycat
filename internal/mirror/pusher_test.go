@@ -2,6 +2,7 @@ package mirror
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -16,7 +17,10 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	remotetransport "github.com/google/go-containerregistry/pkg/v1/remote/transport"
+	"github.com/matzegebbe/k8s-copycat/pkg/metrics"
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 )
 
 type fakeTarget struct {
@@ -29,6 +33,15 @@ func (f fakeTarget) RepoPrefix() string                                  { retur
 func (f fakeTarget) EnsureRepository(_ context.Context, _ string) error  { return nil }
 func (f fakeTarget) BasicAuth(_ context.Context) (string, string, error) { return "", "", nil }
 func (f fakeTarget) Insecure() bool                                      { return f.insecure }
+
+type authErrorTarget struct {
+	fakeTarget
+	err error
+}
+
+func (t authErrorTarget) BasicAuth(_ context.Context) (string, string, error) {
+	return "", "", t.err
+}
 
 func TestResolveRepoPathWithMetadata(t *testing.T) {
 	p := &pusher{
@@ -198,6 +211,60 @@ func TestNewPusherConfiguresExcludedRegistries(t *testing.T) {
 	}
 }
 
+func TestMirrorRecordsPullErrorMetric(t *testing.T) {
+	metrics.Reset()
+	t.Cleanup(metrics.Reset)
+
+	original := remoteGetFunc
+	remoteGetFunc = func(name.Reference, ...remote.Option) (*remote.Descriptor, error) {
+		return nil, errors.New("pull failed")
+	}
+	t.Cleanup(func() { remoteGetFunc = original })
+
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, true, nil)
+	ctx := context.Background()
+
+	err := p.Mirror(ctx, "docker.io/library/nginx:latest", Metadata{})
+	if err == nil {
+		t.Fatalf("expected pull error from Mirror")
+	}
+
+	got := counterValue(t, metrics.PullErrorCounter().WithLabelValues("docker.io/library/nginx:latest"))
+	if got != 1 {
+		t.Fatalf("expected pull_error_total to increment once, got %v", got)
+	}
+}
+
+func TestMirrorRecordsPushErrorMetric(t *testing.T) {
+	metrics.Reset()
+	t.Cleanup(metrics.Reset)
+
+	p := NewPusher(authErrorTarget{fakeTarget: fakeTarget{}, err: errors.New("auth failed")}, false, false, nil, testr.New(t), nil, 0, 0, false, true, nil)
+	ctx := context.Background()
+
+	err := p.Mirror(ctx, "docker.io/library/nginx:1.25", Metadata{})
+	if err == nil {
+		t.Fatalf("expected push error from Mirror")
+	}
+
+	got := counterValue(t, metrics.PushErrorCounter().WithLabelValues("example.com/library/nginx:1.25"))
+	if got != 1 {
+		t.Fatalf("expected push_error_total to increment once, got %v", got)
+	}
+}
+
+func counterValue(t *testing.T, c prometheus.Counter) float64 {
+	t.Helper()
+	metric := &dto.Metric{}
+	if err := c.Write(metric); err != nil {
+		t.Fatalf("failed to read counter: %v", err)
+	}
+	if metric.Counter == nil {
+		t.Fatalf("expected counter metric")
+	}
+	return metric.Counter.GetValue()
+}
+
 func TestMatchExcludedRegistry(t *testing.T) {
 	p := &pusher{excludedRegistries: []string{"example.com", "registry.gitlab.com/group"}}
 
@@ -254,7 +321,7 @@ func TestMirrorSkipsWithoutPodDigestWhenDigestPullEnabled(t *testing.T) {
 }
 
 func TestMirrorSkipsLoggingPushWhenDigestAlreadyPresent(t *testing.T) {
-        digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	digest := "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	normalized := fmt.Sprintf("docker.io/library/alpine@%s", digest)
 
 	var headRefs []string
