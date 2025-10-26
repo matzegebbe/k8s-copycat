@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.3](https://github.com/matzegebbe/k8s-copycat/compare/v0.3.2...v0.3.3) (2025-10-26)
+
+
+### Documentation
+
+* add example ([1450733](https://github.com/matzegebbe/k8s-copycat/commit/14507333e42b1e7de8997a620c2c14020190ea04))
+* add example ([09c685a](https://github.com/matzegebbe/k8s-copycat/commit/09c685a23ce177ca590dcb0df95b0dd2d4a0687d))
+* clarify registry credential guidance ([505123e](https://github.com/matzegebbe/k8s-copycat/commit/505123e09b4e36c623be8a21b0bbdede121ea370))
+* clarify registry credential guidance ([f8c04b2](https://github.com/matzegebbe/k8s-copycat/commit/f8c04b213df79aa4f2c7aec5bef8ba175fd19e83))
+
 ## [0.3.2](https://github.com/matzegebbe/k8s-copycat/compare/v0.3.1...v0.3.2) (2025-10-25)
 
 
