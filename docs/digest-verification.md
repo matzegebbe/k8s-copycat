@@ -23,6 +23,15 @@ skopeo inspect --raw docker://docker.io/library/alpine:3.19 \
 
 Each item contains a digest that identifies the platform-specific image manifest. These digests are the values the kubelet reports in `.status.containerStatuses[].imageID` when your node pulls the matching architecture.
 
+Manifest lists can contain non-runtime artifacts as well. For example, the `quay.io/jitesoft/alpine:3.20.8` index includes entries that advertise `"vnd.docker.reference.type": "attestation-manifest"` with an `unknown/unknown` platform:
+
+```bash
+skopeo inspect --raw docker://quay.io/jitesoft/alpine:3.20.8 \
+  | jq '.manifests[] | select(.annotations."vnd.docker.reference.type"=="attestation-manifest")'
+```
+
+These attestations are used for supply-chain metadata (such as signatures or SBOMs); they are not runnable images. Container runtimes ignore them when resolving a platform, so you can safely skip over them when you only need the digest of the executable image manifest.
+
 To focus on a single platform, combine `--format` with `--raw` to fetch the manifest and compute its digest:
 
 ```bash
@@ -58,6 +67,19 @@ skopeo inspect docker://quay.io/jitesoft/alpine@sha256:95878558b19d60a174a65b635
 
 The first command identifies the manifest list entry for `linux/amd64`; the second inspects that manifest. Its reported digest again matches the runtime's `imageID`, proving that the per-platform manifest and the `imageID` share the same canonical hash.
 
+If you need to query the registry API directly—useful when building automation or verifying what a mirroring controller uploaded—you can request the OCI manifest with the appropriate media type. The registry responds with a `Docker-Content-Digest` header that carries the authoritative hash:
+
+```bash
+curl -sSf \
+  -H 'Accept: application/vnd.oci.image.manifest.v1+json' \
+  https://quay.io/v2/jitesoft/alpine/manifests/sha256:95878558b19d60a174a65b6353e0739af53a7b601442ae737725d9bdd6d5e163 \
+  -D - \
+  | grep Docker-Content-Digest
+# Docker-Content-Digest: sha256:a1b46a5d67877b1aab2fdca9d4b7d2ff2cac14b820f60cecacbcbb2208dcf7b4
+```
+
+The digest in this header matches the value that `skopeo inspect --override-arch ...` reports, confirming you are looking at the platform-specific manifest rather than the top-level index.
+
 ## Single-architecture images
 
 If a tag references only one architecture, `skopeo inspect --format '{{.Digest}}'` yields the same digest that appears when you inspect the manifest directly. There is no manifest list wrapper, so the tag digest and the image digest are identical.
@@ -89,3 +111,7 @@ kind create cluster --image kindest/node:v1.30.0@sha256:<arm64-node-image-digest
 ```
 
 Alternatively, run `kind` on an environment (such as Colima or Lima) that provisions arm64 node images by default so that containerd resolves tags to the `linux/arm64` manifests instead.
+
+## Troubleshooting pull and push failures while iterating digests
+
+When you mirror or verify multiple digests in succession, transient errors should not block progress. If a particular manifest fails to pull or push—for example, due to missing credentials or an attestation entry that does not contain runnable image data—move on to the next manifest in the list and continue processing. Copycat follows this pattern internally: failures are recorded and retried later without preventing other objects from being mirrored. You can emulate that workflow during manual checks by skipping problematic entries and circling back once credentials or permissions have been corrected.
