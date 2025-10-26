@@ -2,9 +2,12 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
+	"time"
 
+	"github.com/go-logr/logr/testr"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -12,6 +15,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/matzegebbe/k8s-copycat/internal/mirror"
+	"github.com/matzegebbe/k8s-copycat/pkg/util"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 func TestNameMatcherMatches(t *testing.T) {
@@ -154,6 +161,80 @@ func TestParseWatchResources(t *testing.T) {
 		t.Fatalf("unexpected invalid list: %v", invalid)
 	}
 }
+
+func TestMirrorPodImagesContinuesAfterError(t *testing.T) {
+	retry := &mirror.RetryError{Cause: errors.New("transient"), RetryAt: time.Now().Add(time.Minute)}
+	otherErr := errors.New("permanent")
+	pusher := &recordingPusher{responses: []error{retry, nil, otherErr}}
+
+	images := []util.PodImage{
+		{Image: "docker.io/library/a:v1", ContainerName: "a"},
+		{Image: "docker.io/library/b:v1", ContainerName: "b"},
+		{Image: "docker.io/library/c:v1", ContainerName: "c"},
+	}
+
+	r := baseReconciler{Pusher: pusher}
+	ctx := ctrl.LoggerInto(context.Background(), testr.New(t))
+
+	mirrored, err := r.mirrorPodImages(ctx, "default", "pod", images)
+	if mirrored != 1 {
+		t.Fatalf("expected exactly one successful mirror, got %d", mirrored)
+	}
+	if len(pusher.calls) != len(images) {
+		t.Fatalf("expected pusher to be invoked for every image, got %d calls", len(pusher.calls))
+	}
+	var gotRetry *mirror.RetryError
+	if !errors.As(err, &gotRetry) {
+		t.Fatalf("expected retry error, got %v", err)
+	}
+	if gotRetry != retry {
+		t.Fatalf("expected retry error pointer to be preserved")
+	}
+}
+
+func TestMirrorPodImagesReturnsFirstErrorWithoutRetry(t *testing.T) {
+	firstErr := errors.New("boom")
+	pusher := &recordingPusher{responses: []error{firstErr, nil}}
+	images := []util.PodImage{
+		{Image: "docker.io/library/a:v1", ContainerName: "a"},
+		{Image: "docker.io/library/b:v1", ContainerName: "b"},
+	}
+
+	r := baseReconciler{Pusher: pusher}
+	ctx := ctrl.LoggerInto(context.Background(), testr.New(t))
+
+	mirrored, err := r.mirrorPodImages(ctx, "default", "pod", images)
+	if mirrored != 1 {
+		t.Fatalf("expected one successful mirror, got %d", mirrored)
+	}
+	if len(pusher.calls) != len(images) {
+		t.Fatalf("expected pusher to be called for both images, got %d", len(pusher.calls))
+	}
+	if err != firstErr {
+		t.Fatalf("expected first error to be returned, got %v", err)
+	}
+}
+
+type recordingPusher struct {
+	responses []error
+	calls     []string
+}
+
+func (p *recordingPusher) Mirror(_ context.Context, sourceImage string, _ mirror.Metadata) error {
+	p.calls = append(p.calls, sourceImage)
+	if len(p.responses) == 0 {
+		return nil
+	}
+	err := p.responses[0]
+	p.responses = p.responses[1:]
+	return err
+}
+
+func (*recordingPusher) DryRun() bool { return false }
+
+func (*recordingPusher) DryPull() bool { return false }
+
+func (*recordingPusher) ResetCooldown() (int, bool) { return 0, false }
 
 func podWithOwner(namespace, name string, gvkt schema.GroupVersionKind, ownerName string) *corev1.Pod {
 	return &corev1.Pod{ObjectMeta: metav1.ObjectMeta{

@@ -65,6 +65,10 @@ Assume a Pod references `docker.io/library/alpine:3.19`:
 
 This difference is important when sizing storage in the mirror registry or when you rely on the new `$arch` prefix placeholder described below.
 
+## Troubleshooting pull and push failures while iterating digests
+
+When you mirror or verify multiple digests in succession, transient errors should not block progress. If a particular manifest fails to pull or push—for example, due to missing credentials or an attestation entry that does not contain runnable image data—move on to the next manifest in the list and continue processing. Copycat follows this pattern internally: failures are recorded and retried later without preventing other objects from being mirrored. You can emulate that workflow during manual checks by skipping problematic entries and circling back once credentials or permissions have been corrected.
+
 ### Selecting watched workloads
 
 By default, k8s-copycat watches Deployments, StatefulSets, DaemonSets, Jobs,

@@ -111,7 +111,3 @@ kind create cluster --image kindest/node:v1.30.0@sha256:<arm64-node-image-digest
 ```
 
 Alternatively, run `kind` on an environment (such as Colima or Lima) that provisions arm64 node images by default so that containerd resolves tags to the `linux/arm64` manifests instead.
-
-## Troubleshooting pull and push failures while iterating digests
-
-When you mirror or verify multiple digests in succession, transient errors should not block progress. If a particular manifest fails to pull or push—for example, due to missing credentials or an attestation entry that does not contain runnable image data—move on to the next manifest in the list and continue processing. Copycat follows this pattern internally: failures are recorded and retried later without preventing other objects from being mirrored. You can emulate that workflow during manual checks by skipping problematic entries and circling back once credentials or permissions have been corrected.
