@@ -43,7 +43,7 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `REGISTRY_REQUEST_TIMEOUT`: override the timeout (in seconds) for individual pull/push operations (default `120`)
 - `FAILURE_COOLDOWN_MINUTES`: minutes to wait before retrying a failed mirror operation (default `1440`, set to `0` to disable)
 - `DIGEST_PULL`: when `true`, resolve tag references to their digest before pulling (default `false`)
-- `CHECK_NODE_PLATFORM`: when `true`, read the scheduled node's architecture/OS for Pods to help select the correct manifest when mirroring multi-architecture images (default `false`)
+- `CHECK_NODE_PLATFORM`: when `true`, read the scheduled node's architecture/OS for Pods to help select the correct manifest when mirroring multi-architecture images (default `false`). Requires `get` access on core `nodes` resources.
 - `ALLOW_DIFFERENT_DIGEST_REPUSH`: when `true`, allow overwriting an existing tag that already exists with a different digest (default `true`, always ignored for the `latest` tag)
 - `DRY_RUN`: when `true`, mirror images without pushing them to the target registry (default `false`)
 - `DRY_PULL`: when `true`, log which images would be fetched from the source registry without contacting it (default `false`)

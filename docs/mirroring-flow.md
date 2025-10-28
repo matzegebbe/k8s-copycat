@@ -58,7 +58,7 @@ When `digestPull` is enabled it might feel like the controller should only ever 
 - When the reconciler includes the node’s architecture/OS in the metadata, the pusher can call `remote.WithPlatform` and select the matching descriptor from the multi-arch index instead of mirroring the full list.
 - With that hint, the only manifest mirrored is the one your node actually runs, so foreign digests no longer appear in the target registry.
 
-Enable this behaviour with the `checkNodePlatform` config option (or the `CHECK_NODE_PLATFORM` environment variable). When it is disabled—the default—the controller mirrors every runnable manifest from the index to keep all architectures in sync.
+Enable this behaviour with the `checkNodePlatform` config option (or the `CHECK_NODE_PLATFORM` environment variable). When it is enabled the controller needs RBAC permission to `get` core `nodes` so it can read the scheduled node's platform details. When the option is disabled—the default—the controller mirrors every runnable manifest from the index to keep all architectures in sync.
 
 ### When digest-only would work without platform data
 
