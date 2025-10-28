@@ -141,6 +141,36 @@ func TestPodReconcilerShouldSkip(t *testing.T) {
 	}
 }
 
+func TestPodReconcilerNodePlatformToggle(t *testing.T) {
+	t.Parallel()
+
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add core scheme: %v", err)
+	}
+
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}}
+	node.Status.NodeInfo.Architecture = "amd64"
+	node.Status.NodeInfo.OperatingSystem = "linux"
+
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(node).Build()
+	pod := &corev1.Pod{Spec: corev1.PodSpec{NodeName: "worker-1"}}
+
+	disabled := PodReconciler{baseReconciler{Client: client}}
+	if arch, os, err := disabled.nodePlatform(context.Background(), pod); err != nil || arch != "" || os != "" {
+		t.Fatalf("expected empty platform without checkNodePlatform, got arch=%q os=%q err=%v", arch, os, err)
+	}
+
+	enabled := PodReconciler{baseReconciler{Client: client, CheckNodePlatform: true}}
+	arch, os, err := enabled.nodePlatform(context.Background(), pod)
+	if err != nil {
+		t.Fatalf("unexpected error resolving platform: %v", err)
+	}
+	if arch != "amd64" || os != "linux" {
+		t.Fatalf("unexpected platform: arch=%q os=%q", arch, os)
+	}
+}
+
 func TestParseWatchResources(t *testing.T) {
 	t.Parallel()
 
@@ -176,7 +206,7 @@ func TestMirrorPodImagesContinuesAfterError(t *testing.T) {
 	r := baseReconciler{Pusher: pusher}
 	ctx := ctrl.LoggerInto(context.Background(), testr.New(t))
 
-	mirrored, err := r.mirrorPodImages(ctx, "default", "pod", images)
+	mirrored, err := r.mirrorPodImages(ctx, "default", "pod", images, "", "")
 	if mirrored != 1 {
 		t.Fatalf("expected exactly one successful mirror, got %d", mirrored)
 	}
@@ -203,7 +233,7 @@ func TestMirrorPodImagesReturnsFirstErrorWithoutRetry(t *testing.T) {
 	r := baseReconciler{Pusher: pusher}
 	ctx := ctrl.LoggerInto(context.Background(), testr.New(t))
 
-	mirrored, err := r.mirrorPodImages(ctx, "default", "pod", images)
+	mirrored, err := r.mirrorPodImages(ctx, "default", "pod", images, "", "")
 	if mirrored != 1 {
 		t.Fatalf("expected one successful mirror, got %d", mirrored)
 	}
@@ -215,13 +245,40 @@ func TestMirrorPodImagesReturnsFirstErrorWithoutRetry(t *testing.T) {
 	}
 }
 
+func TestMirrorPodImagesPropagatesPlatformMetadata(t *testing.T) {
+	pusher := &recordingPusher{}
+	images := []util.PodImage{{Image: "docker.io/library/a:v1", ContainerName: "a"}}
+	r := baseReconciler{Pusher: pusher}
+	ctx := ctrl.LoggerInto(context.Background(), testr.New(t))
+
+	mirrored, err := r.mirrorPodImages(ctx, "default", "pod", images, "amd64", "linux")
+	if err != nil {
+		t.Fatalf("unexpected error mirroring images: %v", err)
+	}
+	if mirrored != 1 {
+		t.Fatalf("expected one mirror, got %d", mirrored)
+	}
+	if len(pusher.metas) != 1 {
+		t.Fatalf("expected exactly one metadata entry, got %d", len(pusher.metas))
+	}
+	meta := pusher.metas[0]
+	if meta.Architecture != "amd64" {
+		t.Fatalf("expected architecture amd64, got %q", meta.Architecture)
+	}
+	if meta.OS != "linux" {
+		t.Fatalf("expected os linux, got %q", meta.OS)
+	}
+}
+
 type recordingPusher struct {
 	responses []error
 	calls     []string
+	metas     []mirror.Metadata
 }
 
-func (p *recordingPusher) Mirror(_ context.Context, sourceImage string, _ mirror.Metadata) error {
+func (p *recordingPusher) Mirror(_ context.Context, sourceImage string, meta mirror.Metadata) error {
 	p.calls = append(p.calls, sourceImage)
+	p.metas = append(p.metas, meta)
 	if len(p.responses) == 0 {
 		return nil
 	}

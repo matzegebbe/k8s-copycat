@@ -160,6 +160,7 @@ type baseReconciler struct {
 	client.Client
 	Scheme            *runtime.Scheme
 	Pusher            mirror.Pusher
+	CheckNodePlatform bool
 	AllowedNamespaces []string // "*" or explicit list
 	SkippedNamespaces map[string]struct{}
 	SkipDeployments   nameMatcher
@@ -348,10 +349,10 @@ func (r *baseReconciler) mirrorPodSpec(ctx context.Context, ns, podName string, 
 		return 0, nil
 	}
 	images := util.ImagesFromPodSpec(spec)
-	return r.mirrorPodImages(ctx, ns, podName, images)
+	return r.mirrorPodImages(ctx, ns, podName, images, "", "")
 }
 
-func (r *baseReconciler) mirrorPodImages(ctx context.Context, ns, podName string, images []util.PodImage) (int, error) {
+func (r *baseReconciler) mirrorPodImages(ctx context.Context, ns, podName string, images []util.PodImage, arch, os string) (int, error) {
 	if len(images) == 0 {
 		return 0, nil
 	}
@@ -366,6 +367,8 @@ func (r *baseReconciler) mirrorPodImages(ctx context.Context, ns, podName string
 			PodName:       podName,
 			ContainerName: img.ContainerName,
 			ImageID:       img.ImageID,
+			Architecture:  arch,
+			OS:            os,
 		}
 		if err := r.Pusher.Mirror(ctx, img.Image, meta); err != nil {
 			log.Error(err, "unable to mirror image", "image", img.Image, "container", img.ContainerName)
@@ -555,8 +558,12 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		return ctrl.Result{}, nil
 	}
 	if p.Status.Phase == corev1.PodPending || p.Status.Phase == corev1.PodRunning {
+		arch, os, err := r.nodePlatform(ctx, &p)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 		images := util.ImagesFromPod(&p)
-		if _, err := r.mirrorPodImages(ctx, p.Namespace, p.Name, images); err != nil {
+		if _, err := r.mirrorPodImages(ctx, p.Namespace, p.Name, images, arch, os); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -568,6 +575,29 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) er
 		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
 		WithEventFilter(predicate.ResourceVersionChangedPredicate{}).
 		Complete(r)
+}
+
+func (r *PodReconciler) nodePlatform(ctx context.Context, pod *corev1.Pod) (string, string, error) {
+	if !r.CheckNodePlatform {
+		return "", "", nil
+	}
+
+	nodeName := strings.TrimSpace(pod.Spec.NodeName)
+	if nodeName == "" {
+		return "", "", nil
+	}
+
+	var node corev1.Node
+	if err := r.Get(ctx, types.NamespacedName{Name: nodeName}, &node); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", "", nil
+		}
+		return "", "", err
+	}
+
+	arch := strings.TrimSpace(node.Status.NodeInfo.Architecture)
+	os := strings.TrimSpace(node.Status.NodeInfo.OperatingSystem)
+	return arch, os, nil
 }
 
 func (r *baseReconciler) shouldSkipPod(ctx context.Context, pod *corev1.Pod) (bool, error) {
@@ -644,11 +674,12 @@ func (r *baseReconciler) shouldSkipJobOwner(ctx context.Context, namespace, name
 	return false, nil
 }
 
-func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCfg SkipConfig, watch []ResourceType, maxConcurrent int) (*ForceReconciler, error) {
+func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCfg SkipConfig, watch []ResourceType, maxConcurrent int, checkNodePlatform bool) (*ForceReconciler, error) {
 	base := baseReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
 		Pusher:            pusher,
+		CheckNodePlatform: checkNodePlatform,
 		AllowedNamespaces: allowedNS,
 		SkippedNamespaces: make(map[string]struct{}, len(skipCfg.Namespaces)),
 		SkipDeployments:   newNameMatcher(skipCfg.Deployments),
