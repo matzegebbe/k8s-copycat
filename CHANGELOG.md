@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.3.3...v0.4.0) (2025-10-28)
+
+
+### Features
+
+* allow nodePlatform ([42c7ff0](https://github.com/matzegebbe/k8s-copycat/commit/42c7ff0fca76471fbfc797994d73e3e872434e06))
+
+
+### Miscellaneous
+
+* allow node reads for platform checks ([91721e2](https://github.com/matzegebbe/k8s-copycat/commit/91721e2e3412da4b220475c91472c7ff730103b3))
+* allow node reads for platform checks ([eaa218b](https://github.com/matzegebbe/k8s-copycat/commit/eaa218b1c22655291e9bea2114a915b8f82fc48d))
+
 ## [0.3.3](https://github.com/matzegebbe/k8s-copycat/compare/v0.3.2...v0.3.3) (2025-10-26)
 
 
