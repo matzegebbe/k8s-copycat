@@ -48,6 +48,7 @@ type Config struct {
 	ECR                        ECR                  `yaml:"ecr"`
 	Docker                     Docker               `yaml:"docker"`
 	DigestPull                 bool                 `yaml:"digestPull"`
+	CheckNodePlatform          bool                 `yaml:"checkNodePlatform"`
 	AllowDifferentDigestRepush *bool                `yaml:"allowDifferentDigestRepush"`
 	IncludeNamespaces          []string             `yaml:"includeNamespaces"`
 	SkipNamespaces             []string             `yaml:"skipNamespaces"`

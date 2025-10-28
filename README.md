@@ -43,6 +43,7 @@ Additionally, we explicitly want a solution **not using admission webhooks**. In
 - `REGISTRY_REQUEST_TIMEOUT`: override the timeout (in seconds) for individual pull/push operations (default `120`)
 - `FAILURE_COOLDOWN_MINUTES`: minutes to wait before retrying a failed mirror operation (default `1440`, set to `0` to disable)
 - `DIGEST_PULL`: when `true`, resolve tag references to their digest before pulling (default `false`)
+- `CHECK_NODE_PLATFORM`: when `true`, read the scheduled node's architecture/OS for Pods to help select the correct manifest when mirroring multi-architecture images (default `false`)
 - `ALLOW_DIFFERENT_DIGEST_REPUSH`: when `true`, allow overwriting an existing tag that already exists with a different digest (default `true`, always ignored for the `latest` tag)
 - `DRY_RUN`: when `true`, mirror images without pushing them to the target registry (default `false`)
 - `DRY_PULL`: when `true`, log which images would be fetched from the source registry without contacting it (default `false`)
@@ -101,6 +102,10 @@ repoPrefix: "$arch/$namespace"
 
 With the example `alpine:3.19` workload shown above, this produces target repositories such as `amd64/default/alpine` when `digestPull=true`, or `386-amd64-arm64-ppc64le-riscv64-s390x/default/alpine` when `digestPull=false` and the manifest list contains all of those variants.
 
+### Why digest-based mirroring can still copy foreign manifests
+
+Multi-architecture images—for example, the `nginx:1.28` release—often expose an OCI index digest in a Pod’s `ImageID`. Without extra platform hints copycat mirrors the entire runnable index so every architecture remains available. Enable `checkNodePlatform: true` (or `CHECK_NODE_PLATFORM=true`) to query the node’s reported architecture and operating system so the pusher selects just the manifest that matches the running platform. See [docs/mirroring-flow.md](docs/mirroring-flow.md#why-pull-by-digest-can-still-copy-other-variants) for the full walkthrough and decision flow.
+
 ### Applying an ECR lifecycle policy
 
 You can provide an [ECR lifecycle policy](https://docs.aws.amazon.com/AmazonECR/latest/userguide/lifecycle_policy_examples.html)
@@ -129,6 +134,7 @@ ecr:
 
 ```yaml
 digestPull: true                  # resolve source tags to their immutable digest before pulling
+checkNodePlatform: true           # optional: ask the API for node architecture/OS before mirroring Pod images
 allowDifferentDigestRepush: false # optional: fail when the target tag already exists with a different digest (except for "latest")
 watchResources:
   - deployments                # default: listen to all supported resource types

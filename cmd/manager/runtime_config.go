@@ -42,6 +42,7 @@ type runtimeConfig struct {
 	Keychain                   authn.Keychain
 	FailureCooldown            time.Duration
 	DigestPull                 bool
+	CheckNodePlatform          bool
 	AllowDifferentDigestRepush bool
 	MaxConcurrentReconciles    int
 	WatchResources             []controllers.ResourceType
@@ -217,6 +218,15 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		digestPull = parsed
 	}
 
+	checkNodePlatform := fileCfg.CheckNodePlatform
+	if v := strings.TrimSpace(os.Getenv("CHECK_NODE_PLATFORM")); v != "" {
+		parsed, parseErr := strconv.ParseBool(v)
+		if parseErr != nil {
+			return runtimeConfig{}, fmt.Errorf("parse check node platform: %w", parseErr)
+		}
+		checkNodePlatform = parsed
+	}
+
 	allowDifferentDigestRepush := true
 	if fileCfg.AllowDifferentDigestRepush != nil {
 		allowDifferentDigestRepush = *fileCfg.AllowDifferentDigestRepush
@@ -272,6 +282,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		Keychain:                   keychain,
 		FailureCooldown:            failureCooldown,
 		DigestPull:                 digestPull,
+		CheckNodePlatform:          checkNodePlatform,
 		AllowDifferentDigestRepush: allowDifferentDigestRepush,
 		MaxConcurrentReconciles:    maxConcurrent,
 		WatchResources:             parsedWatch,

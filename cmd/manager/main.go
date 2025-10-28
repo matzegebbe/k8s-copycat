@@ -156,7 +156,7 @@ func main() {
 		cfg.AllowDifferentDigestRepush,
 		cfg.ExcludedRegistries,
 	)
-	forceReconciler, err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg, cfg.WatchResources, cfg.MaxConcurrentReconciles)
+	forceReconciler, err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg, cfg.WatchResources, cfg.MaxConcurrentReconciles, cfg.CheckNodePlatform)
 	if err != nil {
 		logger.Error(err, "setup controllers failed 🙀")
 		os.Exit(1)

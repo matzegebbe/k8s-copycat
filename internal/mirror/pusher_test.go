@@ -17,6 +17,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	remotetransport "github.com/google/go-containerregistry/pkg/v1/remote/transport"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 	"github.com/matzegebbe/k8s-copycat/pkg/metrics"
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
 	"github.com/prometheus/client_golang/prometheus"
@@ -420,6 +421,101 @@ func TestExpandRepoPrefixSkipsEmptySegments(t *testing.T) {
 			got := expandRepoPrefix(tc.pref, tc.meta)
 			if got != tc.want {
 				t.Fatalf("expected %q, got %q", tc.want, got)
+			}
+		})
+	}
+}
+
+func TestSelectImageDescriptorSkipsAttestations(t *testing.T) {
+	manifest := &v1.IndexManifest{
+		Manifests: []v1.Descriptor{
+			{
+				Digest:      v1.Hash{Algorithm: "sha256", Hex: strings.Repeat("a", 64)},
+				Platform:    &v1.Platform{Architecture: "unknown", OS: "unknown"},
+				Annotations: map[string]string{"vnd.docker.reference.type": "attestation-manifest"},
+			},
+			{
+				Digest:   v1.Hash{Algorithm: "sha256", Hex: strings.Repeat("b", 64)},
+				Platform: &v1.Platform{Architecture: "amd64", OS: "linux"},
+			},
+		},
+	}
+
+	selected, err := selectImageDescriptor(manifest, nil)
+	if err != nil {
+		t.Fatalf("unexpected error selecting descriptor: %v", err)
+	}
+	if got := selected.Digest.Hex; got != strings.Repeat("b", 64) {
+		t.Fatalf("expected to select runnable manifest digest %q, got %q", strings.Repeat("b", 64), got)
+	}
+}
+
+func TestSelectImageDescriptorHonoursPlatform(t *testing.T) {
+	manifest := &v1.IndexManifest{
+		Manifests: []v1.Descriptor{
+			{
+				Digest:   v1.Hash{Algorithm: "sha256", Hex: strings.Repeat("c", 64)},
+				Platform: &v1.Platform{Architecture: "amd64", OS: "linux"},
+			},
+			{
+				Digest:   v1.Hash{Algorithm: "sha256", Hex: strings.Repeat("d", 64)},
+				Platform: &v1.Platform{Architecture: "arm64", OS: "linux"},
+			},
+		},
+	}
+
+	platform := &v1.Platform{Architecture: "arm64", OS: "linux"}
+	selected, err := selectImageDescriptor(manifest, platform)
+	if err != nil {
+		t.Fatalf("unexpected error selecting descriptor: %v", err)
+	}
+	if got := selected.Digest.Hex; got != strings.Repeat("d", 64) {
+		t.Fatalf("expected digest %q for requested platform, got %q", strings.Repeat("d", 64), got)
+	}
+}
+
+func TestShouldMirrorEntireIndex(t *testing.T) {
+	cases := []struct {
+		name         string
+		mediaType    types.MediaType
+		pullByDigest bool
+		platform     *v1.Platform
+		want         bool
+	}{
+		{
+			name:         "non index never mirrors",
+			mediaType:    types.OCIManifestSchema1,
+			pullByDigest: true,
+			platform:     nil,
+			want:         false,
+		},
+		{
+			name:         "tag-based mirroring keeps entire index",
+			mediaType:    types.OCIImageIndex,
+			pullByDigest: false,
+			platform:     nil,
+			want:         true,
+		},
+		{
+			name:         "digest pull without platform mirrors index",
+			mediaType:    types.OCIImageIndex,
+			pullByDigest: true,
+			platform:     nil,
+			want:         true,
+		},
+		{
+			name:         "digest pull with platform mirrors single manifest",
+			mediaType:    types.OCIImageIndex,
+			pullByDigest: true,
+			platform:     &v1.Platform{Architecture: "amd64", OS: "linux"},
+			want:         false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := shouldMirrorEntireIndex(tc.mediaType, tc.pullByDigest, tc.platform); got != tc.want {
+				t.Fatalf("expected %v, got %v", tc.want, got)
 			}
 		})
 	}

@@ -18,6 +18,7 @@ import (
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	remotetransport "github.com/google/go-containerregistry/pkg/v1/remote/transport"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 
 	"github.com/matzegebbe/k8s-copycat/internal/registry"
 	"github.com/matzegebbe/k8s-copycat/pkg/metrics"
@@ -399,7 +400,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	)
 
 	switch {
-	case desc.MediaType.IsIndex() && !p.pullByDigest:
+	case shouldMirrorEntireIndex(desc.MediaType, p.pullByDigest, platform):
 		idx, err = desc.ImageIndex()
 		if err != nil {
 			logRegistryAuthError(log, err, "pull")
@@ -407,7 +408,11 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			return p.failureResult(target, fmt.Errorf("load index %s: %w", src, err))
 		}
 		pushIndex = true
-		log.V(1).Info("Detected multi-architecture manifest list", "mediaType", desc.MediaType, "action", "mirroring all manifests")
+		if platform == nil {
+			log.V(1).Info("mirroring entire multi-architecture index", "mediaType", desc.MediaType, "reason", "platform metadata unavailable")
+		} else {
+			log.V(1).Info("mirroring entire multi-architecture index", "mediaType", desc.MediaType, "reason", "digestPull disabled")
+		}
 	default:
 		img, err = desc.Image()
 		if err != nil {
@@ -872,19 +877,35 @@ func imageFromIndex(idx v1.ImageIndex, platform *v1.Platform) (v1.Image, error) 
 	if err != nil {
 		return nil, err
 	}
+
+	selected, err := selectImageDescriptor(manifest, platform)
+	if err != nil {
+		return nil, err
+	}
+
+	return idx.Image(selected.Digest)
+}
+
+func selectImageDescriptor(manifest *v1.IndexManifest, platform *v1.Platform) (*v1.Descriptor, error) {
 	if manifest == nil || len(manifest.Manifests) == 0 {
 		return nil, fmt.Errorf("image index has no manifests")
 	}
 
-	selected := &manifest.Manifests[0]
+	runnable := make([]*v1.Descriptor, 0, len(manifest.Manifests))
+	for i := range manifest.Manifests {
+		candidate := &manifest.Manifests[i]
+		if descriptorIsRunnable(candidate) {
+			runnable = append(runnable, candidate)
+		}
+	}
+	if len(runnable) == 0 {
+		return nil, fmt.Errorf("image index has no runnable manifests")
+	}
+
 	if platform != nil {
 		desiredArch := strings.TrimSpace(platform.Architecture)
 		desiredOS := strings.TrimSpace(platform.OS)
-		for i := range manifest.Manifests {
-			candidate := &manifest.Manifests[i]
-			if candidate.Platform == nil {
-				continue
-			}
+		for _, candidate := range runnable {
 			arch := strings.TrimSpace(candidate.Platform.Architecture)
 			os := strings.TrimSpace(candidate.Platform.OS)
 			if desiredArch != "" && !strings.EqualFold(arch, desiredArch) {
@@ -893,12 +914,44 @@ func imageFromIndex(idx v1.ImageIndex, platform *v1.Platform) (v1.Image, error) 
 			if desiredOS != "" && !strings.EqualFold(os, desiredOS) {
 				continue
 			}
-			selected = candidate
-			break
+			return candidate, nil
 		}
 	}
 
-	return idx.Image(selected.Digest)
+	return runnable[0], nil
+}
+
+func descriptorIsRunnable(desc *v1.Descriptor) bool {
+	if desc == nil {
+		return false
+	}
+	if typ, ok := desc.Annotations["vnd.docker.reference.type"]; ok {
+		if strings.EqualFold(strings.TrimSpace(typ), "attestation-manifest") {
+			return false
+		}
+	}
+	if desc.Platform == nil {
+		return false
+	}
+	arch := strings.TrimSpace(desc.Platform.Architecture)
+	if arch == "" || strings.EqualFold(arch, "unknown") {
+		return false
+	}
+	os := strings.TrimSpace(desc.Platform.OS)
+	if os == "" || strings.EqualFold(os, "unknown") {
+		return false
+	}
+	return true
+}
+
+func shouldMirrorEntireIndex(mediaType types.MediaType, pullByDigest bool, platform *v1.Platform) bool {
+	if !mediaType.IsIndex() {
+		return false
+	}
+	if !pullByDigest {
+		return true
+	}
+	return platform == nil
 }
 
 func resolveArchitecture(useIndex bool, idx v1.ImageIndex, img v1.Image) string {
@@ -911,7 +964,7 @@ func resolveArchitecture(useIndex bool, idx v1.ImageIndex, img v1.Image) string 
 						continue
 					}
 					arch := strings.TrimSpace(m.Platform.Architecture)
-					if arch == "" {
+					if arch == "" || strings.EqualFold(arch, "unknown") {
 						continue
 					}
 					seen[arch] = struct{}{}
