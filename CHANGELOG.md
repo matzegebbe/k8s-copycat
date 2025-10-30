@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.4.0...v0.4.1) (2025-10-30)
+
+
+### Bug Fixes
+
+* **mirror:** scope mirrorPlatforms filtering to digest pulls ([067f7ac](https://github.com/matzegebbe/k8s-copycat/commit/067f7acf74391ae3aa228a4d27f4abc40435bfaa))
+* **mirror:** scope mirrorPlatforms filtering to digest pulls ([894ae6a](https://github.com/matzegebbe/k8s-copycat/commit/894ae6aa998bc5b962423251268deca9f5409681))
+
 ## [0.4.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.3.3...v0.4.0) (2025-10-28)
 
 
