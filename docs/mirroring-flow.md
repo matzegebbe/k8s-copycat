@@ -20,7 +20,7 @@ flowchart TD
     M -- No --> O[Ensure target repository exists]
     M -- Yes --> N{Digest matches source?}
     N -- Yes --> Z[End]
-    N -- No --> R{Allowed to overwrite different digest? (latest tag or allowDifferentDigestRepush)}
+    N -- No --> R{Allowed to overwrite different digest? latest tag or allowDifferentDigestRepush}
     R -- No --> Q[Fail reconciliation and report mismatch]
     R -- Yes --> O
     O --> P[Push image manifest to target]
@@ -45,7 +45,7 @@ flowchart TD
     H -- No --> I[Push image or index to target]
     H -- Yes --> J{Digest matches source?}
     J -- Yes --> K[Skip push and finish]
-    J -- No --> L{Allowed to overwrite different digest? (latest tag or allowDifferentDigestRepush)}
+    J -- No --> L{Allowed to overwrite different digest? latest tag or allowDifferentDigestRepush}
     L -- No --> M[Fail reconciliation and report mismatch]
     L -- Yes --> I
     I --> N[Log push completion]
