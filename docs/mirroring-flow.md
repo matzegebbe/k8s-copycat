@@ -8,18 +8,27 @@ flowchart TD
     C -- Yes --> E{checkNodePlatform enabled?}
     E -- Yes --> F[Look up node architecture/OS]
     E -- No --> G[Skip node lookup]
-    F --> H[Pull by digest and select manifest matching node platform]
-    G --> I[Pull by digest and mirror entire index when descriptor is multi-arch]
-    H --> J[Check target registry for existing digest]
-    I --> J[Check target registry for existing digest]
-    J -- Digest exists --> K[Skip push and finish]
-    J -- Missing --> L[Ensure target repository exists]
-    L --> M[Push image manifest to target]
-    M --> N[Log push completion]
-    D --> O[End]
-    K --> O
-    N --> O
-    B -- No --> P[[See flow below]]
+    F --> H{mirrorPlatforms configured?}
+    G --> I{mirrorPlatforms configured?}
+    H -- Yes --> J[Pull by digest and mirror configured platform subset]
+    H -- No --> K[Pull by digest and select manifest matching node platform]
+    I -- Yes --> J
+    I -- No --> L[Pull by digest and mirror entire index when descriptor is multi-arch]
+    J --> M{Image present in target?}
+    K --> M
+    L --> M
+    M -- No --> O[Ensure target repository exists]
+    M -- Yes --> N{Digest matches source?}
+    N -- Yes --> Z[End]
+    N -- No --> R{Allowed to overwrite different digest?\n(`latest` tag or allowDifferentDigestRepush)}
+    R -- No --> Q[Fail reconciliation and report mismatch]
+    R -- Yes --> O
+    O --> P[Push image manifest to target]
+    P --> S[Log push completion]
+    Q --> Z
+    D --> Z
+    S --> Z
+    B -- No --> T[[See flow below]]
 
 ```
 
@@ -32,12 +41,17 @@ flowchart TD
     D -- No --> F[Mirror single image]
     E --> G[Ensure target repository exists]
     F --> G
-    G --> H{Image already present with same digest?}
-    H -- Yes --> I[Skip push and finish]
-    H -- No --> J[Push image or index to target]
-    J --> K[Log push completion]
-    I --> L[End]
-    K --> L
+    G --> H{Image present in target?}
+    H -- No --> I[Push image or index to target]
+    H -- Yes --> J{Digest matches source?}
+    J -- Yes --> K[Skip push and finish]
+    J -- No --> L{Allowed to overwrite different digest?\n(`latest` tag or allowDifferentDigestRepush)}
+    L -- No --> M[Fail reconciliation and report mismatch]
+    L -- Yes --> I
+    I --> N[Log push completion]
+    K --> O[End]
+    N --> O
+    M --> O
 
 ```
 
@@ -59,6 +73,8 @@ When `digestPull` is enabled it might feel like the controller should only ever 
 - With that hint, the only manifest mirrored is the one your node actually runs, so foreign digests no longer appear in the target registry.
 
 Enable this behaviour with the `checkNodePlatform` config option (or the `CHECK_NODE_PLATFORM` environment variable). When it is enabled the controller needs RBAC permission to `get` core `nodes` so it can read the scheduled node's platform details. When the option is disabled—the default—the controller mirrors every runnable manifest from the index to keep all architectures in sync.
+
+If you regularly need multiple platforms regardless of where workloads land, declare them explicitly with the `mirrorPlatforms` configuration (or the `MIRROR_PLATFORMS` environment variable). When `digestPull` is enabled, copycat mirrors the subset of manifests that match the configured platforms and any reported node platform. If `checkNodePlatform` surfaces a platform that is not in the configured list, copycat logs a warning so you can decide whether to add it.
 
 ### When digest-only would work without platform data
 

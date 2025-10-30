@@ -43,6 +43,7 @@ type runtimeConfig struct {
 	FailureCooldown            time.Duration
 	DigestPull                 bool
 	CheckNodePlatform          bool
+	MirrorPlatforms            []string
 	AllowDifferentDigestRepush bool
 	MaxConcurrentReconciles    int
 	WatchResources             []controllers.ResourceType
@@ -227,6 +228,8 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		checkNodePlatform = parsed
 	}
 
+	mirrorPlatforms := resolveList(os.Getenv("MIRROR_PLATFORMS"), fileCfg.MirrorPlatforms)
+
 	allowDifferentDigestRepush := true
 	if fileCfg.AllowDifferentDigestRepush != nil {
 		allowDifferentDigestRepush = *fileCfg.AllowDifferentDigestRepush
@@ -283,6 +286,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		FailureCooldown:            failureCooldown,
 		DigestPull:                 digestPull,
 		CheckNodePlatform:          checkNodePlatform,
+		MirrorPlatforms:            mirrorPlatforms,
 		AllowDifferentDigestRepush: allowDifferentDigestRepush,
 		MaxConcurrentReconciles:    maxConcurrent,
 		WatchResources:             parsedWatch,

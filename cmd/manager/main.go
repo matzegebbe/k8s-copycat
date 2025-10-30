@@ -155,6 +155,7 @@ func main() {
 		cfg.DigestPull,
 		cfg.AllowDifferentDigestRepush,
 		cfg.ExcludedRegistries,
+		cfg.MirrorPlatforms,
 	)
 	forceReconciler, err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg, cfg.WatchResources, cfg.MaxConcurrentReconciles, cfg.CheckNodePlatform)
 	if err != nil {

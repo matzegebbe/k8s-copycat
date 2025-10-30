@@ -189,7 +189,7 @@ func TestResolveRepoPathWithArchitectureMetadata(t *testing.T) {
 }
 
 func TestDryPullOption(t *testing.T) {
-	p := NewPusher(fakeTarget{}, true, true, nil, testr.New(t), nil, 0, 0, false, true, nil)
+	p := NewPusher(fakeTarget{}, true, true, nil, testr.New(t), nil, 0, 0, false, true, nil, nil)
 
 	if !p.DryPull() {
 		t.Fatalf("expected dry pull to be enabled")
@@ -197,7 +197,7 @@ func TestDryPullOption(t *testing.T) {
 }
 
 func TestNewPusherConfiguresExcludedRegistries(t *testing.T) {
-	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, true, []string{"registry.gitlab.com/team/"})
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, true, []string{"registry.gitlab.com/team/"}, nil)
 
 	impl, ok := p.(*pusher)
 	if !ok {
@@ -222,7 +222,7 @@ func TestMirrorRecordsPullErrorMetric(t *testing.T) {
 	}
 	t.Cleanup(func() { remoteGetFunc = original })
 
-	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, true, nil)
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, true, nil, nil)
 	ctx := context.Background()
 
 	err := p.Mirror(ctx, "docker.io/library/nginx:latest", Metadata{})
@@ -240,7 +240,7 @@ func TestMirrorRecordsPushErrorMetric(t *testing.T) {
 	metrics.Reset()
 	t.Cleanup(metrics.Reset)
 
-	p := NewPusher(authErrorTarget{fakeTarget: fakeTarget{}, err: errors.New("auth failed")}, false, false, nil, testr.New(t), nil, 0, 0, false, true, nil)
+	p := NewPusher(authErrorTarget{fakeTarget: fakeTarget{}, err: errors.New("auth failed")}, false, false, nil, testr.New(t), nil, 0, 0, false, true, nil, nil)
 	ctx := context.Background()
 
 	err := p.Mirror(ctx, "docker.io/library/nginx:1.25", Metadata{})
@@ -251,6 +251,48 @@ func TestMirrorRecordsPushErrorMetric(t *testing.T) {
 	got := counterValue(t, metrics.PushErrorCounter().WithLabelValues("example.com/library/nginx:1.25"))
 	if got != 1 {
 		t.Fatalf("expected push_error_total to increment once, got %v", got)
+	}
+}
+
+func TestParsePlatformSpecDefaultsToLinux(t *testing.T) {
+	spec, err := parsePlatformSpec("amd64")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if spec.Architecture != "amd64" || spec.OS != "linux" {
+		t.Fatalf("unexpected spec: %#v", spec)
+	}
+}
+
+func TestParseMirrorPlatformsDeduplicates(t *testing.T) {
+	specs, set := parseMirrorPlatforms(testr.New(t), []string{"linux/amd64", "amd64", "linux/ARM64", ""})
+	if len(specs) != 2 {
+		t.Fatalf("expected two unique platforms, got %d: %#v", len(specs), specs)
+	}
+	if len(set) != 2 {
+		t.Fatalf("expected set to track two platforms, got %d", len(set))
+	}
+	if _, ok := set["linux/amd64"]; !ok {
+		t.Fatalf("expected linux/amd64 in set")
+	}
+	if _, ok := set["linux/arm64"]; !ok {
+		t.Fatalf("expected linux/arm64 in set")
+	}
+}
+
+func TestDesiredPlatformsPrioritizesNode(t *testing.T) {
+	p := &pusher{mirrorPlatforms: []platformSpec{{Architecture: "arm64", OS: "linux"}}}
+	meta := &v1.Platform{Architecture: "amd64", OS: "linux"}
+
+	got := p.desiredPlatforms(meta)
+	if len(got) != 2 {
+		t.Fatalf("expected two platforms, got %d", len(got))
+	}
+	if got[0].Architecture != "amd64" || got[0].OS != "linux" {
+		t.Fatalf("expected node platform first, got %#v", got[0])
+	}
+	if got[1].Architecture != "arm64" {
+		t.Fatalf("expected configured platform second, got %#v", got[1])
 	}
 }
 
