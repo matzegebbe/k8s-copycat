@@ -16,6 +16,8 @@ import (
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	remotetransport "github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/types"
@@ -50,6 +52,61 @@ type Metadata struct {
 	ImageID       string
 }
 
+type platformSpec struct {
+	Architecture string
+	OS           string
+}
+
+func (p platformSpec) key() string {
+	arch := strings.ToLower(strings.TrimSpace(p.Architecture))
+	os := strings.ToLower(strings.TrimSpace(p.OS))
+	return os + "/" + arch
+}
+
+func (p platformSpec) toPlatform() *v1.Platform {
+	arch := strings.TrimSpace(p.Architecture)
+	os := strings.TrimSpace(p.OS)
+	if arch == "" {
+		return nil
+	}
+	if os == "" {
+		os = "linux"
+	}
+	return &v1.Platform{Architecture: arch, OS: os}
+}
+
+func (p platformSpec) String() string {
+	arch := strings.TrimSpace(p.Architecture)
+	os := strings.TrimSpace(p.OS)
+	if os == "" {
+		return arch
+	}
+	if arch == "" {
+		return os
+	}
+	return os + "/" + arch
+}
+
+func (p platformSpec) matches(desc *v1.Descriptor) bool {
+	if desc == nil || desc.Platform == nil {
+		return false
+	}
+	arch := strings.TrimSpace(desc.Platform.Architecture)
+	os := strings.TrimSpace(desc.Platform.OS)
+	if arch == "" || os == "" {
+		return false
+	}
+	desiredArch := strings.TrimSpace(p.Architecture)
+	desiredOS := strings.TrimSpace(p.OS)
+	if desiredArch != "" && !strings.EqualFold(desiredArch, arch) {
+		return false
+	}
+	if desiredOS != "" && !strings.EqualFold(desiredOS, os) {
+		return false
+	}
+	return true
+}
+
 func normalizeImageID(imageID string) string {
 	trimmed := strings.TrimSpace(imageID)
 	if trimmed == "" {
@@ -59,6 +116,54 @@ func normalizeImageID(imageID string) string {
 		trimmed = trimmed[idx+3:]
 	}
 	return strings.TrimSpace(trimmed)
+}
+
+func parsePlatformSpec(value string) (platformSpec, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return platformSpec{}, fmt.Errorf("empty platform")
+	}
+	var spec platformSpec
+	if strings.Contains(trimmed, "/") {
+		parts := strings.SplitN(trimmed, "/", 2)
+		spec.OS = strings.TrimSpace(parts[0])
+		spec.Architecture = strings.TrimSpace(parts[1])
+	} else {
+		spec.OS = "linux"
+		spec.Architecture = trimmed
+	}
+	if spec.Architecture == "" {
+		return platformSpec{}, fmt.Errorf("missing architecture in platform %q", value)
+	}
+	if spec.OS == "" {
+		spec.OS = "linux"
+	}
+	return spec, nil
+}
+
+func parseMirrorPlatforms(logger logr.Logger, values []string) ([]platformSpec, map[string]struct{}) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	parsed := make([]platformSpec, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, raw := range values {
+		spec, err := parsePlatformSpec(raw)
+		if err != nil {
+			logger.Info("ignoring invalid mirror platform", "value", strings.TrimSpace(raw), "error", err.Error())
+			continue
+		}
+		key := spec.key()
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		parsed = append(parsed, spec)
+		seen[key] = struct{}{}
+	}
+	if len(parsed) == 0 {
+		return nil, nil
+	}
+	return parsed, seen
 }
 
 func digestReferenceFromImageID(imageID string, src name.Reference) (string, name.Digest, error) {
@@ -108,6 +213,8 @@ type pusher struct {
 	transform                  func(string) string
 	pullByDigest               bool
 	allowDifferentDigestRepush bool
+	mirrorPlatforms            []platformSpec
+	mirrorPlatformSet          map[string]struct{}
 	mu                         sync.Mutex
 	pushed                     map[string]struct{}
 	logger                     logr.Logger
@@ -142,7 +249,7 @@ func (e *RetryError) Unwrap() error {
 	return e.Cause
 }
 
-func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, allowDifferentDigestRepush bool, excluded []string) Pusher {
+func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, allowDifferentDigestRepush bool, excluded []string, mirrorPlatforms []string) Pusher {
 	if transform == nil {
 		transform = util.CleanRepoName
 	}
@@ -161,6 +268,7 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 		failureCooldown = DefaultFailureCooldown
 	}
 	normalizedExclusions := normalizeExcludedRegistries(excluded)
+	parsedPlatforms, platformSet := parseMirrorPlatforms(logger, mirrorPlatforms)
 
 	return &pusher{
 		target:                     t,
@@ -169,6 +277,8 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 		transform:                  transform,
 		pullByDigest:               pullByDigest,
 		allowDifferentDigestRepush: allowDifferentDigestRepush,
+		mirrorPlatforms:            parsedPlatforms,
+		mirrorPlatformSet:          platformSet,
 		pushed:                     make(map[string]struct{}),
 		logger:                     logger,
 		keychain:                   keychain,
@@ -369,8 +479,29 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	var desc *remote.Descriptor
 	descCancel := func() {}
 
-	platform := platformFromMetadata(meta)
-	desc, descCancel, err = getDescriptor(pullRef, platform)
+	metaPlatform := platformFromMetadata(meta)
+	desiredPlatforms := p.desiredPlatforms(metaPlatform)
+	primaryPlatform := metaPlatform
+	if len(desiredPlatforms) > 0 {
+		primaryPlatform = desiredPlatforms[0].toPlatform()
+	}
+
+	requestPlatform := primaryPlatform
+	if len(desiredPlatforms) > 1 {
+		requestPlatform = nil
+	}
+
+	if spec, ok := specFromPlatform(metaPlatform); ok && len(p.mirrorPlatformSet) > 0 {
+		if _, allowed := p.mirrorPlatformSet[spec.key()]; !allowed {
+			log.WithValues("severity", "warning").Info(
+				"checkNodePlatform detected platform not configured in mirrorPlatforms; continuing with node-specific manifest",
+				"architecture", metaPlatform.Architecture,
+				"os", metaPlatform.OS,
+			)
+		}
+	}
+
+	desc, descCancel, err = getDescriptor(pullRef, requestPlatform)
 	if err != nil {
 		logRegistryAuthError(log, err, "pull descriptor")
 		metrics.RecordPullError(src)
@@ -400,7 +531,38 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	)
 
 	switch {
-	case shouldMirrorEntireIndex(desc.MediaType, p.pullByDigest, platform):
+	case desc.MediaType.IsIndex() && p.pullByDigest && len(desiredPlatforms) > 1:
+		idx, err = desc.ImageIndex()
+		if err != nil {
+			logRegistryAuthError(log, err, "pull")
+			metrics.RecordPullError(src)
+			return p.failureResult(target, fmt.Errorf("load index %s: %w", src, err))
+		}
+		filtered, matched, missing, filterErr := p.filterIndexByPlatforms(idx, desiredPlatforms)
+		if filterErr != nil {
+			logRegistryAuthError(log, filterErr, "pull")
+			metrics.RecordPullError(src)
+			return p.failureResult(target, fmt.Errorf("filter index %s: %w", src, filterErr))
+		}
+		if len(matched) == 0 {
+			log.Info(
+				"configured mirrorPlatforms not found in source index; mirroring full index",
+				"requestedPlatforms", specsToStrings(desiredPlatforms),
+			)
+		} else {
+			idx = filtered
+			if len(missing) > 0 {
+				log.Info(
+					"some configured mirrorPlatforms missing from source index", "missingPlatforms", specsToStrings(missing),
+				)
+			}
+			log.Info(
+				"mirroring configured subset of multi-architecture index",
+				"platforms", specsToStrings(matched),
+			)
+		}
+		pushIndex = true
+	case shouldMirrorEntireIndex(desc.MediaType, p.pullByDigest, primaryPlatform):
 		idx, err = desc.ImageIndex()
 		if err != nil {
 			logRegistryAuthError(log, err, "pull")
@@ -408,7 +570,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			return p.failureResult(target, fmt.Errorf("load index %s: %w", src, err))
 		}
 		pushIndex = true
-		if platform == nil {
+		if primaryPlatform == nil {
 			log.V(1).Info("mirroring entire multi-architecture index", "mediaType", desc.MediaType, "reason", "platform metadata unavailable")
 		} else {
 			log.V(1).Info("mirroring entire multi-architecture index", "mediaType", desc.MediaType, "reason", "digestPull disabled")
@@ -424,7 +586,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 					return p.failureResult(target, fmt.Errorf("load index %s: %w", src, idxErr))
 				}
 				var selectErr error
-				img, selectErr = imageFromIndex(idx, platform)
+				img, selectErr = imageFromIndex(idx, primaryPlatform)
 				if selectErr != nil {
 					logRegistryAuthError(log, selectErr, "pull")
 					metrics.RecordPullError(src)
@@ -942,6 +1104,108 @@ func descriptorIsRunnable(desc *v1.Descriptor) bool {
 		return false
 	}
 	return true
+}
+
+func specFromPlatform(platform *v1.Platform) (platformSpec, bool) {
+	if platform == nil {
+		return platformSpec{}, false
+	}
+	arch := strings.TrimSpace(platform.Architecture)
+	if arch == "" {
+		return platformSpec{}, false
+	}
+	os := strings.TrimSpace(platform.OS)
+	if os == "" {
+		os = "linux"
+	}
+	return platformSpec{Architecture: arch, OS: os}, true
+}
+
+func (p *pusher) desiredPlatforms(metaPlatform *v1.Platform) []platformSpec {
+	desired := make([]platformSpec, 0, len(p.mirrorPlatforms)+1)
+	seen := make(map[string]struct{}, len(p.mirrorPlatforms)+1)
+	if spec, ok := specFromPlatform(metaPlatform); ok {
+		key := spec.key()
+		desired = append(desired, spec)
+		seen[key] = struct{}{}
+	}
+	for _, spec := range p.mirrorPlatforms {
+		key := spec.key()
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		desired = append(desired, spec)
+		seen[key] = struct{}{}
+	}
+	return desired
+}
+
+func (p *pusher) filterIndexByPlatforms(idx v1.ImageIndex, desired []platformSpec) (v1.ImageIndex, []platformSpec, []platformSpec, error) {
+	manifest, err := idx.IndexManifest()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	if manifest == nil {
+		return nil, nil, desired, fmt.Errorf("image index has no manifests")
+	}
+	adds := make([]mutate.IndexAddendum, 0, len(desired))
+	matched := make([]platformSpec, 0, len(desired))
+	missing := make([]platformSpec, 0, len(desired))
+	for _, spec := range desired {
+		desc := findDescriptorForSpec(manifest, spec)
+		if desc == nil {
+			missing = append(missing, spec)
+			continue
+		}
+		appendable, appendErr := appendableForDescriptor(idx, desc)
+		if appendErr != nil {
+			return nil, nil, nil, appendErr
+		}
+		adds = append(adds, mutate.IndexAddendum{Add: appendable, Descriptor: *desc})
+		matched = append(matched, spec)
+	}
+	if len(adds) == 0 {
+		return idx, matched, missing, nil
+	}
+	filtered := mutate.AppendManifests(empty.Index, adds...)
+	return filtered, matched, missing, nil
+}
+
+func appendableForDescriptor(idx v1.ImageIndex, desc *v1.Descriptor) (mutate.Appendable, error) {
+	if desc == nil {
+		return nil, fmt.Errorf("descriptor is nil")
+	}
+	if desc.MediaType.IsIndex() {
+		return idx.ImageIndex(desc.Digest)
+	}
+	return idx.Image(desc.Digest)
+}
+
+func findDescriptorForSpec(manifest *v1.IndexManifest, spec platformSpec) *v1.Descriptor {
+	if manifest == nil {
+		return nil
+	}
+	for i := range manifest.Manifests {
+		candidate := &manifest.Manifests[i]
+		if !descriptorIsRunnable(candidate) {
+			continue
+		}
+		if spec.matches(candidate) {
+			return candidate
+		}
+	}
+	return nil
+}
+
+func specsToStrings(specs []platformSpec) []string {
+	if len(specs) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		out = append(out, spec.String())
+	}
+	return out
 }
 
 func shouldMirrorEntireIndex(mediaType types.MediaType, pullByDigest bool, platform *v1.Platform) bool {

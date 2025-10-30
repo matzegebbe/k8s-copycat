@@ -104,7 +104,7 @@ With the example `alpine:3.19` workload shown above, this produces target reposi
 
 ### Why digest-based mirroring can still copy foreign manifests
 
-Multi-architecture images—for example, the `nginx:1.28` release—often expose an OCI index digest in a Pod’s `ImageID`. Without extra platform hints copycat mirrors the entire runnable index so every architecture remains available. Enable `checkNodePlatform: true` (or `CHECK_NODE_PLATFORM=true`) to query the node’s reported architecture and operating system so the pusher selects just the manifest that matches the running platform. See [docs/mirroring-flow.md](docs/mirroring-flow.md#why-pull-by-digest-can-still-copy-other-variants) for the full walkthrough and decision flow.
+Multi-architecture images—for example, the `nginx:1.28` release—often expose an OCI index digest in a Pod’s `ImageID`. Without extra platform hints copycat mirrors the entire runnable index so every architecture remains available. Enable `checkNodePlatform: true` (or `CHECK_NODE_PLATFORM=true`) to query the node’s reported architecture and operating system so the pusher selects just the manifest that matches the running platform. You can also provide an explicit allow-list of additional variants with `mirrorPlatforms` (or `MIRROR_PLATFORMS`) when you want to keep multiple architectures in sync even if the workload only reports one. See [docs/mirroring-flow.md](docs/mirroring-flow.md#why-pull-by-digest-can-still-copy-other-variants) for the full walkthrough and decision flow.
 
 ### Applying an ECR lifecycle policy
 
@@ -135,6 +135,9 @@ ecr:
 ```yaml
 digestPull: true                  # resolve source tags to their immutable digest before pulling
 checkNodePlatform: true           # optional: ask the API for node architecture/OS before mirroring Pod images
+mirrorPlatforms:                  # optional: always mirror these additional platforms when digestPull is enabled
+  - amd64                         # shorthand for linux/amd64 also works
+  - linux/arm64
 allowDifferentDigestRepush: false # optional: fail when the target tag already exists with a different digest (except for "latest")
 watchResources:
   - deployments                # default: listen to all supported resource types
