@@ -52,35 +52,31 @@ func init() {
 }
 
 // RecordPullSuccess increments the pull success counter for the provided image.
-func RecordPullSuccess(image string) {
+func recordMetric(counter *prometheus.CounterVec, image string) {
 	if image == "" {
 		return
 	}
-	pullSuccess.WithLabelValues(image).Inc()
+	counter.WithLabelValues(image).Inc()
+}
+
+// RecordPullSuccess increments the pull success counter for the provided image.
+func RecordPullSuccess(image string) {
+	recordMetric(pullSuccess, image)
 }
 
 // RecordPullError increments the pull error counter for the provided image.
 func RecordPullError(image string) {
-	if image == "" {
-		return
-	}
-	pullError.WithLabelValues(image).Inc()
+	recordMetric(pullError, image)
 }
 
 // RecordPushSuccess increments the push success counter for the provided image.
 func RecordPushSuccess(image string) {
-	if image == "" {
-		return
-	}
-	pushSuccess.WithLabelValues(image).Inc()
+	recordMetric(pushSuccess, image)
 }
 
 // RecordPushError increments the push error counter for the provided image.
 func RecordPushError(image string) {
-	if image == "" {
-		return
-	}
-	pushError.WithLabelValues(image).Inc()
+	recordMetric(pushError, image)
 }
 
 // Reset clears internal metrics state. It is intended for use in tests only.
