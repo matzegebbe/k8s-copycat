@@ -410,131 +410,117 @@ func (r *baseReconciler) processPodSpec(ctx context.Context, ns, podName string,
 	return ctrl.Result{RequeueAfter: defaultRetryDelay}, nil
 }
 
-type DeploymentReconciler struct{ baseReconciler }
+type workloadFetcher func(context.Context, client.Client, types.NamespacedName) (string, string, *corev1.PodSpec, error)
 
-func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *baseReconciler) reconcileWorkload(ctx context.Context, req ctrl.Request, skip nameMatcher, kind string, fetch workloadFetcher) (ctrl.Result, error) {
 	if !r.nsAllowed(req.Namespace) {
 		return ctrl.Result{}, nil
 	}
-	if r.SkipDeployments.matches(req.Namespace, req.Name) {
+	if skip.matches(req.Namespace, req.Name) {
 		return ctrl.Result{}, nil
 	}
 	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("saw Deployment", "name", req.Name, "namespace", req.Namespace)
-	var d appsv1.Deployment
-	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &d); err != nil {
+	log.V(1).Info("saw "+kind, "name", req.Name, "namespace", req.Namespace)
+	ns, name, spec, err := fetch(ctx, r.Client, req.NamespacedName)
+	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	return r.processPodSpec(ctx, d.Namespace, d.Name, &d.Spec.Template.Spec)
+	return r.processPodSpec(ctx, ns, name, spec)
 }
 
-func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
+func setupWorkloadController(mgr ctrl.Manager, r ctrl.Reconciler, obj client.Object, maxConcurrent int) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&appsv1.Deployment{}).
+		For(obj).
 		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
 		WithEventFilter(predicate.GenerationChangedPredicate{}).
 		Complete(r)
+}
+
+func fetchDeploymentSpec(ctx context.Context, c client.Client, key types.NamespacedName) (string, string, *corev1.PodSpec, error) {
+	var d appsv1.Deployment
+	if err := c.Get(ctx, key, &d); err != nil {
+		return "", "", nil, err
+	}
+	return d.Namespace, d.Name, &d.Spec.Template.Spec, nil
+}
+
+func fetchStatefulSetSpec(ctx context.Context, c client.Client, key types.NamespacedName) (string, string, *corev1.PodSpec, error) {
+	var s appsv1.StatefulSet
+	if err := c.Get(ctx, key, &s); err != nil {
+		return "", "", nil, err
+	}
+	return s.Namespace, s.Name, &s.Spec.Template.Spec, nil
+}
+
+func fetchDaemonSetSpec(ctx context.Context, c client.Client, key types.NamespacedName) (string, string, *corev1.PodSpec, error) {
+	var ds appsv1.DaemonSet
+	if err := c.Get(ctx, key, &ds); err != nil {
+		return "", "", nil, err
+	}
+	return ds.Namespace, ds.Name, &ds.Spec.Template.Spec, nil
+}
+
+func fetchJobSpec(ctx context.Context, c client.Client, key types.NamespacedName) (string, string, *corev1.PodSpec, error) {
+	var j batchv1.Job
+	if err := c.Get(ctx, key, &j); err != nil {
+		return "", "", nil, err
+	}
+	return j.Namespace, j.Name, &j.Spec.Template.Spec, nil
+}
+
+func fetchCronJobSpec(ctx context.Context, c client.Client, key types.NamespacedName) (string, string, *corev1.PodSpec, error) {
+	var cj batchv1.CronJob
+	if err := c.Get(ctx, key, &cj); err != nil {
+		return "", "", nil, err
+	}
+	return cj.Namespace, cj.Name, &cj.Spec.JobTemplate.Spec.Template.Spec, nil
+}
+
+type DeploymentReconciler struct{ baseReconciler }
+
+func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	return r.reconcileWorkload(ctx, req, r.SkipDeployments, "Deployment", fetchDeploymentSpec)
+}
+
+func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
+	return setupWorkloadController(mgr, r, &appsv1.Deployment{}, maxConcurrent)
 }
 
 type StatefulSetReconciler struct{ baseReconciler }
 
 func (r *StatefulSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if !r.nsAllowed(req.Namespace) {
-		return ctrl.Result{}, nil
-	}
-	if r.SkipStatefulSets.matches(req.Namespace, req.Name) {
-		return ctrl.Result{}, nil
-	}
-	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("saw StatefulSet", "name", req.Name, "namespace", req.Namespace)
-	var s appsv1.StatefulSet
-	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &s); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	return r.processPodSpec(ctx, s.Namespace, s.Name, &s.Spec.Template.Spec)
+	return r.reconcileWorkload(ctx, req, r.SkipStatefulSets, "StatefulSet", fetchStatefulSetSpec)
 }
 func (r *StatefulSetReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&appsv1.StatefulSet{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
-		Complete(r)
+	return setupWorkloadController(mgr, r, &appsv1.StatefulSet{}, maxConcurrent)
 }
 
 type DaemonSetReconciler struct{ baseReconciler }
 
 func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if !r.nsAllowed(req.Namespace) {
-		return ctrl.Result{}, nil
-	}
-	if r.SkipDaemonSets.matches(req.Namespace, req.Name) {
-		return ctrl.Result{}, nil
-	}
-	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("saw DaemonSet", "name", req.Name, "namespace", req.Namespace)
-	var ds appsv1.DaemonSet
-	if err := r.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, &ds); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	return r.processPodSpec(ctx, ds.Namespace, ds.Name, &ds.Spec.Template.Spec)
+	return r.reconcileWorkload(ctx, req, r.SkipDaemonSets, "DaemonSet", fetchDaemonSetSpec)
 }
 
 func (r *DaemonSetReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&appsv1.DaemonSet{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
-		Complete(r)
+	return setupWorkloadController(mgr, r, &appsv1.DaemonSet{}, maxConcurrent)
 }
 
 type JobReconciler struct{ baseReconciler }
 
 func (r *JobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if !r.nsAllowed(req.Namespace) {
-		return ctrl.Result{}, nil
-	}
-	if r.SkipJobs.matches(req.Namespace, req.Name) {
-		return ctrl.Result{}, nil
-	}
-	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("saw Job", "name", req.Name, "namespace", req.Namespace)
-	var j batchv1.Job
-	if err := r.Get(ctx, req.NamespacedName, &j); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	return r.processPodSpec(ctx, j.Namespace, j.Name, &j.Spec.Template.Spec)
+	return r.reconcileWorkload(ctx, req, r.SkipJobs, "Job", fetchJobSpec)
 }
 func (r *JobReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&batchv1.Job{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
-		Complete(r)
+	return setupWorkloadController(mgr, r, &batchv1.Job{}, maxConcurrent)
 }
 
 type CronJobReconciler struct{ baseReconciler }
 
 func (r *CronJobReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	if !r.nsAllowed(req.Namespace) {
-		return ctrl.Result{}, nil
-	}
-	if r.SkipCronJobs.matches(req.Namespace, req.Name) {
-		return ctrl.Result{}, nil
-	}
-	log := ctrl.LoggerFrom(ctx)
-	log.V(1).Info("saw CronJob", "name", req.Name, "namespace", req.Namespace)
-	var cj batchv1.CronJob
-	if err := r.Get(ctx, req.NamespacedName, &cj); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	return r.processPodSpec(ctx, cj.Namespace, cj.Name, &cj.Spec.JobTemplate.Spec.Template.Spec)
+	return r.reconcileWorkload(ctx, req, r.SkipCronJobs, "CronJob", fetchCronJobSpec)
 }
 func (r *CronJobReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&batchv1.CronJob{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
-		Complete(r)
+	return setupWorkloadController(mgr, r, &batchv1.CronJob{}, maxConcurrent)
 }
 
 type PodReconciler struct{ baseReconciler }
