@@ -145,13 +145,25 @@ metadata:
   namespace: k8s-copycat
 data:
   config.yaml: |
-    targetKind: docker     # ecr | docker
-    logLevel: debug         # debug | info | warn | error | dpanic | panic | fatal
-    dryRun: true             # enable for smoke-testing without pushing images
-    dryPull: true            # log source pulls without contacting upstream registries
+    targetKind: docker                  # ecr | docker
+    logLevel: debug                     # debug | info | warn | error | dpanic | panic | fatal
+    dryRun: true                        # enable for smoke-testing without pushing images
+    dryPull: true                       # log source pulls without contacting upstream registries
     includeNamespaces: ["test"]
-    watchResources:
-      - pods
+    # digestPull: true                  # resolve source tags to their immutable digest before pulling
+    # checkNodePlatform: true           # optional: ask the API for node architecture/OS before mirroring Pod images
+    # mirrorPlatforms:                  # optional: always mirror these additional platforms when digestPull is enabled
+    # - amd64                           # shorthand for linux/amd64 also works
+    # - linux/arm64
+    # allowDifferentDigestRepush: false # optional: fail when the target tag already exists with a different digest (except for "latest")
+    # excludeRegistries: ["123456789.dkr.ecr.eu-central-1.amazonaws.com", "registry.gitlab.com", "internal.registry/team"]
+    # watchResources:
+    #   - deployments                   # default: listen to all supported resource types
+    #   - statefulsets
+    #   - daemonsets
+    #   - jobs
+    #   - cronjobs
+    #   - pods
     # skipNamespaces: ["kube-system"]
     # skipNames:
     #   deployments: ["copycat"]
@@ -159,10 +171,10 @@ data:
     #   jobs: ["backup"]
     #   cronJobs: ["nightly"]
     #   pods: ["custom-pod"]
-    # excludeRegistries: ["123456789.dkr.ecr.eu-central-1.amazonaws.com", "registry.gitlab.com", "internal.registry/team"]
-    requestTimeout: 120      # seconds; set to 0 to disable per-request deadlines
-    # failureCooldownMinutes: 1440   # retry failed pushes after one day; set to 0 to disable the cooldown
-    # forceReconcileMinutes: 60      # trigger a full resync every hour; set to 0 to disable the periodic resync
+    maxConcurrentReconciles: 1         # default: two workers per controller
+    requestTimeout: 120                # seconds; set to 0 to disable per-request deadlines
+    # failureCooldownMinutes: 1440     # retry failed pushes after one day; set to 0 to disable the cooldown
+    # forceReconcileMinutes: 60        # trigger a full resync every hour; set to 0 to disable the periodic resync
     #ecr:
     #  accountID: "123456789012"
     #  region: "eu-central-1"
