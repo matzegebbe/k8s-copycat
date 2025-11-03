@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/matzegebbe/k8s-copycat/internal/mirror"
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
@@ -428,7 +429,7 @@ func (r *baseReconciler) reconcileWorkload(ctx context.Context, req ctrl.Request
 	return r.processPodSpec(ctx, ns, name, spec)
 }
 
-func setupWorkloadController(mgr ctrl.Manager, r ctrl.Reconciler, obj client.Object, maxConcurrent int) error {
+func setupWorkloadController(mgr ctrl.Manager, r reconcile.Reconciler, obj client.Object, maxConcurrent int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(obj).
 		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrent}).
