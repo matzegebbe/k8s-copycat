@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.3](https://github.com/matzegebbe/k8s-copycat/compare/v0.4.2...v0.4.3) (2025-11-03)
+
+
+### Bug Fixes
+
+* **manifest:** expand node permissions to include list and watch ([6de1d86](https://github.com/matzegebbe/k8s-copycat/commit/6de1d865a4717f6bbc21e3abc6c51ee26df12403))
+* **manifest:** expand node permissions to include list and watch ([681e6c0](https://github.com/matzegebbe/k8s-copycat/commit/681e6c0f36b6e89a06f957fd0b205073b0f97a80))
+
+
+### Miscellaneous
+
+* **manifest:** add several options to manifest ([#106](https://github.com/matzegebbe/k8s-copycat/issues/106)) ([22f7871](https://github.com/matzegebbe/k8s-copycat/commit/22f78714ea4dc14596e9a8f1e379520684172039))
+
 ## [0.4.2](https://github.com/matzegebbe/k8s-copycat/compare/v0.4.1...v0.4.2) (2025-10-31)
 
 
