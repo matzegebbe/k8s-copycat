@@ -1,115 +1,151 @@
-# ⚠️ Disclaimer
-
-This is an **absolutely experimental WIP project**.
-Do **not** use it in production environments.
-
-# k8s-copycat for Container Images
+# k8s-copycat
 
 ![k8s-copycat logo](k8s-copycat-logo.png)
 
-k8s-copycat monitors your cluster’s **Deployments**, **StatefulSets**, **DaemonSets**, **Jobs**, **CronJobs**, and **Pods** to mirror their container images into **AWS ECR** or any other Docker-compatible registry. Tune the behavior with namespace allow/deny lists, workload skip lists, repo prefix templating, and more so the sync fits your environment.
+> Continuously mirror the images your Kubernetes workloads already run into the registry you control.
 
-## Why Does This Project Exist?
+## ⚠️ Disclaimer
 
-In recent times, we have repeatedly run into situations where official registries:
+This is an **absolutely experimental WIP project**. Do **not** use it in production environments.
+
+## Table of Contents
+
+- [Overview](#overview)
+- [Why k8s-copycat?](#why-k8s-copycat)
+- [Key Capabilities](#key-capabilities)
+- [Getting Started](#getting-started)
+- [Configuration](#configuration)
+  - [Environment variables](#environment-variables)
+  - [Digest-based mirroring](#digest-based-mirroring)
+  - [Watching workloads](#watching-workloads)
+  - [Repository prefix templating](#repository-prefix-templating)
+  - [Lifecycle policies](#lifecycle-policies)
+  - [Example configuration](#example-configuration)
+  - [Registry credentials](#registry-credentials)
+- [Troubleshooting mirrors](#troubleshooting-mirrors)
+- [Inspiration](#inspiration)
+
+## Overview
+
+k8s-copycat monitors **Deployments**, **StatefulSets**, **DaemonSets**, **Jobs**, **CronJobs**, and **Pods** to mirror their container images into **AWS ECR** or any other Docker-compatible registry. It keeps your recovery registry in sync with what is actively running—no image swaps, admission webhooks, or pod restarts required.
+
+The controller runs inside your cluster and reacts to changes in workload specs and status. Once configured, it continuously copies referenced images into a registry that you own so they are available when upstream registries throttle, disappear, or delete content without notice.
+
+## Why k8s-copycat?
+
+Over the last years we repeatedly encountered scenarios where official registries:
 
 - Serve different image versions
 - Become overloaded
 - Enforce strict pull limits
 - Are taken down completely
-- Have images deleted without notice
+- Delete images without notice
 
-To ensure we always have a reliable backup of the
-images running in our cluster—**without swapping them out**—this project was born.
+To guarantee access to the exact images already running in our cluster—**without swapping them out**—we built k8s-copycat. Unlike pull-through proxies such as Harbor, copycat maintains a **dedicated mirror registry** that only receives artifacts you choose to replicate.
 
-Yes, there are pull-through proxies like Harbor or other caching options.
-But the goal here is different: to maintain a **dedicated registry** that holds all the critical images we need, so we can access them instantly when it really matters.
+We also needed a solution that **does not rely on admission webhooks** because of network restrictions in EKS/Cilium environments (see [cilium/cilium#21959](https://github.com/cilium/cilium/issues/21959) for background). Copycat accomplishes this by watching workload resources directly through the Kubernetes API.
 
-Additionally, we explicitly want a solution **not using admission webhooks**. In our case, we always have to work with proxies through EKS/Cilium nodeport availability. See [cilium/cilium#21959](https://github.com/cilium/cilium/issues/21959) for more context.
+## Key Capabilities
 
-**Inspired by:**
-[estahn/k8s-image-swapper](https://github.com/estahn/k8s-image-swapper)
+- Continuously mirrors workloads into ECR or any Docker-compatible registry
+- Supports namespace allow/deny lists, workload skip lists, and registry exclusions
+- Handles manifest lists, attestations, and multi-architecture images
+- Provides templated repository prefixes to segregate mirrored content
+- Exposes Prometheus metrics for observability
+- Operates in dry-run modes to validate configuration before pushing
 
-## Environment Variables
+## Getting Started
 
-- `TARGET_KIND`: `ecr` (default) or `docker`
-- `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO` (for ECR)
-- `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD`, `TARGET_INSECURE` (for Docker)
-- `INCLUDE_NAMESPACES`: `*` or comma-separated list (e.g., `default,prod`)
-- `SKIP_NAMESPACES`: comma-separated namespaces that should be ignored entirely
-- `SKIP_DEPLOYMENTS`, `SKIP_STATEFULSETS`, `SKIP_DAEMONSETS`, `SKIP_JOBS`, `SKIP_CRONJOBS`, `SKIP_PODS`: comma-separated workload names to ignore
-- `EXCLUDE_REGISTRIES`: comma-separated list of registry prefixes that should be skipped entirely. Include the configured target registry (for example, `123456789.dkr.ecr.eu-central-1.amazonaws.com`) to avoid mirroring back into the same registry.
-- `WATCH_RESOURCES`: comma-separated list of resource types to watch (default `deployments,statefulsets,daemonsets,jobs,cronjobs,pods`)
-- `REGISTRY_REQUEST_TIMEOUT`: override the timeout (in seconds) for individual pull/push operations (default `120`)
-- `FAILURE_COOLDOWN_MINUTES`: minutes to wait before retrying a failed mirror operation (default `1440`, set to `0` to disable)
-- `DIGEST_PULL`: when `true`, resolve tag references to their digest before pulling (default `false`)
-- `CHECK_NODE_PLATFORM`: when `true`, read the scheduled node's architecture/OS for Pods to help select the correct manifest when mirroring multi-architecture images (default `false`). Requires `get` access on core `nodes` resources.
-- `ALLOW_DIFFERENT_DIGEST_REPUSH`: when `true`, allow overwriting an existing tag that already exists with a different digest (default `true`, always ignored for the `latest` tag)
-- `DRY_RUN`: when `true`, mirror images without pushing them to the target registry (default `false`)
-- `DRY_PULL`: when `true`, log which images would be fetched from the source registry without contacting it (default `false`)
-- `METRICS_ADDR`: bind address for the Prometheus metrics endpoint (default `:8080`)
-- Optional `pathMap` in the config file rewrites repository paths before pushing
+Clone the repository, build the controller, and apply the Kubernetes manifests under [`manifests/`](manifests/) tailored to your cluster. A sample configuration is available in [`example/`](example/) and the [`docs/`](docs/) directory contains deep dives into mirroring logic, deployment options, and operational guidance.
 
-### How `digestPull` changes the mirroring flow
+At minimum you will need to:
 
-Whether `digestPull` is enabled determines how copycat interacts with multi-architecture images:
+1. Choose a target registry (`TARGET_KIND=ecr` or `TARGET_KIND=docker`).
+2. Provide credentials that allow pulling from source registries and pushing to the destination.
+3. Deploy the controller with access to watch the workloads you want mirrored.
 
-- **`digestPull: true` / `DIGEST_PULL=true`** – copycat resolves the tag to its immutable digest. When reconciling Pods it prefers the digest reported by the kubelet in the container `ImageID`, guaranteeing that the mirrored artifact matches what actually runs on the node, even across architectures. When copycat only has a PodSpec (for example, from a Deployment) it falls back to resolving the digest from the registry.
-- **`digestPull: false` / default** – copycat keeps the original tag reference. When it encounters a manifest list (for example, `alpine:3.19`), it downloads the entire multi-architecture index and uploads every referenced platform image to the target registry.
+Once running, copycat begins replicating the images referenced by your workloads, respecting namespace and resource filters.
+
+## Configuration
+
+Copycat is configured through a combination of environment variables and a YAML configuration file. Any values defined in the environment override what is present in the config file, allowing safe secret management in Kubernetes.
+
+### Environment variables
+
+**Target selection**
+
+- `TARGET_KIND`: `ecr` (default) or `docker`.
+- `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO`: configure AWS ECR mirroring.
+- `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD`, `TARGET_INSECURE`: configure other Docker registries.
+
+**Workload selection**
+
+- `INCLUDE_NAMESPACES`: `*` or a comma-separated list (for example `default,prod`).
+- `SKIP_NAMESPACES`: namespaces that should never be mirrored.
+- `SKIP_DEPLOYMENTS`, `SKIP_STATEFULSETS`, `SKIP_DAEMONSETS`, `SKIP_JOBS`, `SKIP_CRONJOBS`, `SKIP_PODS`: workload names to ignore.
+- `WATCH_RESOURCES`: comma-separated resource types to watch (default `deployments,statefulsets,daemonsets,jobs,cronjobs,pods`).
+
+**Registry routing**
+
+- `EXCLUDE_REGISTRIES`: registry prefixes that should never be mirrored. Include the target registry (for example `123456789.dkr.ecr.eu-central-1.amazonaws.com`) to avoid loops.
+- `TARGET_REPO_PREFIX` or config `repoPrefix`: prepend names before pushing to the destination.
+- Optional `pathMap` entries in the config file rewrite repository paths before pushing.
+
+**Mirroring behavior**
+
+- `DIGEST_PULL`: resolve tags to digests before pulling (`false` by default).
+- `CHECK_NODE_PLATFORM`: consult node architecture/OS before mirroring multi-arch images (`false` by default, requires `get` on `nodes`).
+- `ALLOW_DIFFERENT_DIGEST_REPUSH`: permit overwriting tags with different digests (`true` by default, `latest` is always protected).
+- `DRY_RUN`: perform all operations except pushing to the target registry (`false` by default).
+- `DRY_PULL`: log which images would be fetched without contacting the source registry (`false` by default).
+
+**Operations and observability**
+
+- `REGISTRY_REQUEST_TIMEOUT`: timeout (in seconds) for individual pull/push operations (`120` by default).
+- `FAILURE_COOLDOWN_MINUTES`: wait time before retrying a failed mirror (`1440` by default, `0` disables the cooldown).
+- `METRICS_ADDR`: bind address for Prometheus metrics (`:8080` by default).
+- `MAX_CONCURRENT_RECONCILES`: overrides the worker count per controller (defaults to `2`).
+
+### Digest-based mirroring
+
+Whether digest resolution is enabled fundamentally changes how copycat interacts with multi-architecture images:
+
+- **`digestPull: true` / `DIGEST_PULL=true`** – copycat resolves the tag to its immutable digest. When reconciling Pods it prefers the digest reported by the kubelet in the container `ImageID`, guaranteeing that the mirrored artifact matches what actually runs on the node, even across architectures. When copycat only has a PodSpec (for example from a Deployment) it falls back to resolving the digest from the registry.
+- **`digestPull: false` / default** – copycat keeps the original tag reference. When it encounters a manifest list (for example `alpine:3.19`), it downloads the entire multi-architecture index and uploads every referenced platform image to the target registry.
 
 #### Alpine example
 
 Assume a Pod references `docker.io/library/alpine:3.19`:
 
 - With `digestPull=false`, copycat mirrors the manifest list and pushes layers for all available architectures (currently `386`, `amd64`, `arm64`, `ppc64le`, `riscv64`, and `s390x`) so the target registry can serve any of them.
-- With `digestPull=true`, copycat mirrors the exact digest reported in the Pod’s status (for example, `docker.io/library/alpine@sha256:...`). If the Pod runs on an `arm64` node, copycat mirrors the `arm64` manifest even when the controller is running on `amd64`.
+- With `digestPull=true`, copycat mirrors the exact digest reported in the Pod’s status (for example `docker.io/library/alpine@sha256:...`). If the Pod runs on an `arm64` node, copycat mirrors the `arm64` manifest even when the controller executes on `amd64`.
 
-This difference is important when sizing storage in the mirror registry or when you rely on the new `$arch` prefix placeholder described below.
+This distinction matters when sizing storage in the mirror registry or when you rely on the `$arch` prefix placeholder described below.
 
-## Troubleshooting pull and push failures while iterating references
+### Watching workloads
 
-When you mirror or verify a batch of image references—tags, digests, manifest lists, or attestations—transient errors should not block progress. If a particular reference fails to pull or push for any reason (missing credentials, an attestation without runnable image data, or a registry hiccup), move on to the next entry and continue processing. Copycat follows this pattern internally: failures are recorded and retried later without preventing other objects from being mirrored. You can emulate that workflow during manual checks by skipping problematic entries and circling back once credentials or permissions have been corrected.
-
-### Selecting watched workloads
-
-By default, k8s-copycat watches Deployments, StatefulSets, DaemonSets, Jobs,
-CronJobs, and stand-alone Pods. You can narrow the scope by providing
-`WATCH_RESOURCES` (environment variable) or `watchResources` in the config
-file. Supported values are `deployments`, `statefulsets`, `daemonsets`, `jobs`,
-`cronjobs`, and `pods` (case-insensitive). Any unsupported entries are rejected
-at startup so you can fix typos before the controller begins to run.
+Copycat listens to the Kubernetes resources you select. By default it watches Deployments, StatefulSets, DaemonSets, Jobs, CronJobs, and stand-alone Pods. You can narrow the scope through the `WATCH_RESOURCES` environment variable or the `watchResources` field in the configuration file. Unsupported entries are rejected at startup so you can catch typos early.
 
 ### Repository prefix templating
 
-When a `repoPrefix` is configured (via config file or the corresponding
-environment variables), the value can include placeholders that are replaced at
-runtime. The following tokens are supported:
+When a `repoPrefix` is configured (via config file or environment variables), the value can include placeholders that are replaced at runtime. The following tokens are available:
 
-- `$namespace` — Namespace of the workload or pod referencing the image
-- `$podname` — Name of the owning resource (or pod when available)
-- `$container_name` — Name of the container that uses the image
-- `$arch` — Architecture of the mirrored image. When `digestPull` is enabled this is the architecture of the selected manifest (for example, `amd64`). When mirroring a manifest list, the placeholder expands to a hyphen-separated list of all mirrored architectures (for example, `386-amd64-arm64-ppc64le-riscv64-s390x`). If copycat cannot determine the architecture it leaves the segment blank.
+- `$namespace` — Namespace of the workload or Pod referencing the image.
+- `$podname` — Name of the owning resource (or Pod when available).
+- `$container_name` — Container name that uses the image.
+- `$arch` — Architecture of the mirrored image. When `digestPull` is enabled this is the architecture of the selected manifest (for example `amd64`). When mirroring a manifest list, the placeholder expands to a hyphen-separated list of all mirrored architectures (for example `386-amd64-arm64-ppc64le-riscv64-s390x`). If copycat cannot determine the architecture it leaves the segment blank.
 
-For example, setting `repoPrefix: "$namespace/$podname"` ensures that the
-resulting target repositories are unique across namespaces, even when multiple
-workloads reference the same source image.
-
-To separate images per architecture, you can combine placeholders:
+For example, setting `repoPrefix: "$namespace/$podname"` keeps target repositories unique across namespaces even when multiple workloads reference the same source image. To separate images by architecture you can combine placeholders:
 
 ```yaml
 repoPrefix: "$arch/$namespace"
 ```
 
-With the example `alpine:3.19` workload shown above, this produces target repositories such as `amd64/default/alpine` when `digestPull=true`, or `386-amd64-arm64-ppc64le-riscv64-s390x/default/alpine` when `digestPull=false` and the manifest list contains all of those variants.
+With the `alpine:3.19` example above this produces repositories such as `amd64/default/alpine` when `digestPull=true`, or `386-amd64-arm64-ppc64le-riscv64-s390x/default/alpine` when `digestPull=false` and the manifest list exposes all those variants.
 
-### Why digest-based mirroring can still copy foreign manifests
+### Lifecycle policies
 
-Multi-architecture images—for example, the `nginx:1.28` release—often expose an OCI index digest in a Pod’s `ImageID`. Without extra platform hints copycat mirrors the entire runnable index so every architecture remains available. Enable `checkNodePlatform: true` (or `CHECK_NODE_PLATFORM=true`) to query the node’s reported architecture and operating system so the pusher selects just the manifest that matches the running platform. You can also provide an explicit allow-list of additional variants with `mirrorPlatforms` (or `MIRROR_PLATFORMS`) when you want to keep multiple architectures in sync even if the workload only reports one. See [docs/mirroring-flow.md](docs/mirroring-flow.md#why-pull-by-digest-can-still-copy-other-variants) for the full walkthrough and decision flow.
-
-### Applying an ECR lifecycle policy
-
-You can provide an [ECR lifecycle policy](https://docs.aws.amazon.com/AmazonECR/latest/userguide/lifecycle_policy_examples.html)
-in the config file. When a repository is created by k8s-copycat, the policy is applied automatically.
+You can provide an [ECR lifecycle policy](https://docs.aws.amazon.com/AmazonECR/latest/userguide/lifecycle_policy_examples.html) in the configuration file. When a repository is created by k8s-copycat, the policy is applied automatically.
 
 ```yaml
 ecr:
@@ -130,7 +166,7 @@ ecr:
     }
 ```
 
-### Example `config.yaml` Snippet
+### Example configuration
 
 ```yaml
 digestPull: true                  # resolve source tags to their immutable digest before pulling
@@ -161,24 +197,9 @@ pathMap:
   - from: "^legacy/(.*)"
     to: "modern/$1"
     regex: true
-```
-
-Rules are evaluated in order, with the first matching entry applied. Leaving
-`pathMap` empty keeps repository paths unchanged.
-
-When `maxConcurrentReconciles` is omitted, copycat defaults to two workers per controller. You can also override the value at
-runtime via the `MAX_CONCURRENT_RECONCILES` environment variable.
-
-### Configuring registry credentials
-
-You can provide additional credentials used when pulling source images. This is
-useful for authenticating against Docker Hub or other registries even when
-mirroring into a different target such as ECR.
-
-```yaml
-requestTimeout: 120          # seconds; set to 0 to disable per-request deadlines
-failureCooldownMinutes: 60   # retry failed pushes after one hour; set to 0 to disable the cooldown
-forceReconcileMinutes: 30    # rescan all watched resources every 30 minutes; set to 0 to disable the periodic resync
+requestTimeout: 120              # seconds; set to 0 to disable per-request deadlines
+failureCooldownMinutes: 60       # retry failed pushes after one hour; set to 0 to disable the cooldown
+forceReconcileMinutes: 30        # rescan all watched resources every 30 minutes; set to 0 to disable the periodic resync
 registryCredentials:
   - registry: registry-1.docker.io
     registryAliases:
@@ -194,135 +215,16 @@ registryCredentials:
     tokenEnv: GHCR_TOKEN
 ```
 
-Credentials can be supplied directly in the configuration file via `username`,
-`password`, or `token`, but using environment variables (referenced through
-`*Env` fields) is recommended for secrets. When a token is provided it is sent as
-an authentication bearer token; otherwise basic authentication is used.
+Rules are evaluated in order, with the first matching entry applied. Leaving `pathMap` empty keeps repository paths unchanged. When `maxConcurrentReconciles` is omitted, copycat defaults to two workers per controller. You can override the value at runtime via the `MAX_CONCURRENT_RECONCILES` environment variable.
 
-Each entry can optionally declare `registryAliases` to mirror credentials across
-multiple hostnames. Copycat lowercases every alias and applies the same
-authenticator to each of them. Wildcards such as `*.docker.io` are supported and
-are matched using Go's [`filepath.Match`](https://pkg.go.dev/path/filepath#Match)
-rules, enabling a single configuration block to authenticate Docker Hub's
-various hostnames or custom registry sharding schemes.
+### Registry credentials
 
-`requestTimeout` limits how long copycat waits for each registry pull and push. When the timeout elapses, the current operation is aborted so the controller can retry later. Setting the value to `0` (or omitting it) disables the per-request deadline and lets copycat rely on the underlying client timeouts.
+The `registryCredentials` section (or matching environment variables) lets copycat authenticate against private registries while mirroring into your target. Credentials can be supplied directly in the configuration file via `username`, `password`, or `token`, but referencing secret values through environment variables (`*Env` fields) is recommended. When a token is provided it is sent as an authentication bearer token; otherwise basic authentication is used.
 
-When `failureCooldownMinutes` is set to `0`, copycat retries failed pushes immediately without recording cooldown state. Omit the field to use the default of 24 hours.
+## Troubleshooting mirrors
 
-`forceReconcileMinutes` triggers a periodic full resync for all watched resources, mirroring the behavior seen immediately after startup. This ensures every workload is re-evaluated on a fixed cadence so images are repushed even without new Kubernetes events.
+When you mirror or verify batches of image references—tags, digests, manifest lists, or attestations—transient errors should not block progress. If a particular reference fails to pull or push (missing credentials, non-runnable attestation, registry hiccup), skip it and continue. Copycat follows the same pattern internally: failures are recorded and retried later without preventing other objects from being mirrored. Emulate that workflow during manual checks by circling back once credentials or permissions have been corrected.
 
-### Operational HTTP endpoints
+## Inspiration
 
-Copycat exposes a pair of helper endpoints on the metrics listener (default `:8080`) to trigger common maintenance actions on demand:
-
-- `POST /reset-cooldown` clears the failure cooldown state so failed mirrors are eligible for immediate retry.
-- `POST /force-reconcile` performs a one-off full reconciliation across all watched workloads, mirroring their images using the same rules as the controllers.
-
-Both endpoints return JSON responses describing the action that was taken. Requests can also be issued with `GET` for compatibility with simple tooling.
-
-### Guaranteeing digest consistency
-
-Set `digestPull: true` (or the `DIGEST_PULL` environment variable) to pin mirrored images to the digest that was active when the controller observed the workload. Copycat resolves the tag to its digest first and then pulls using that immutable reference, reducing the risk of race conditions when upstream registries re-tag images. See [docs/digest-verification.md](docs/digest-verification.md) for a step-by-step walkthrough of verifying digests with `skopeo` and relating them to Kubernetes `imageID` values.
-
-By default, copycat overwrites existing image tags at the target registry even when the digest differs from the source so the mirrored repository always matches what is currently running. Enable the safeguard by setting `allowDifferentDigestRepush: false` (or `ALLOW_DIFFERENT_DIGEST_REPUSH=false`) when you want copycat to refuse replacing tags that already exist with a different digest. The protection is always skipped for the conventional `latest` tag to maintain the previous behavior for mutable tags.
-
-## Build Container
-
-```bash
-docker build -t ghcr.io/matzegebbe/k8s-copycat:main .
-```
-
-## How It Works
-
-- Manager (controller-runtime) runs controllers for Deployments, StatefulSets, Jobs, CronJobs, and Pods
-- On events, we collect images from the PodSpec and push them to the target registry
-
-## Dry Run Modes
-
-k8s-copycat provides two complementary dry-run toggles that help validate configuration without mutating registries.
-
-- **Push dry-run** skips writing images to the target registry after they have been mirrored locally. Enable it with the `--dry-run` flag, by setting `dryRun: true` in your configuration file, or through the `DRY_RUN` environment variable.
-- **Pull dry-run** logs which images would be retrieved from the source registry without contacting it. Enable it with the `--dry-pull` flag, by setting `dryPull: true` in your configuration file, or via the `DRY_PULL` environment variable.
-
-Both flags can be used together or independently depending on how much of the mirroring workflow you want to exercise.
-
-## Testing with Kind
-
-You can validate a copycat deployment locally by creating a [kind](https://kind.sigs.k8s.io/) cluster and applying the provided manifest. The default configuration in `manifests/k8s.yaml` enables dry-run mode so no registry pushes are attempted during the smoke test.
-
-1. Create a fresh kind cluster:
-
-   ```bash
-   kind create cluster --name copycat
-   ```
-
-2. Apply the manifest from this repository:
-
-   ```bash
-   kubectl apply -f manifests/k8s.yaml
-   ```
-
-3. Wait for the controller to become ready:
-
-   ```bash
-   kubectl wait --for=condition=available deployment/k8s-copycat -n k8s-copycat --timeout=120s
-   ```
-
-4. Inspect the logs to confirm the manager starts successfully and begins watching workloads:
-
-   ```bash
-   kubectl logs deployment/k8s-copycat -n k8s-copycat
-   ```
-
-5. When you are done testing, delete the cluster:
-
-   ```bash
-   kind delete cluster --name copycat
-   ```
-
-Switch off dry-run mode and update the configuration (for example, uncomment the Docker registry settings in the ConfigMap) before deploying to a shared "General" cluster so that images are mirrored into your real registry.
-
-## Metrics
-
-k8s-copycat exposes Prometheus metrics on `/metrics`. The listener binds to the
-address configured via `METRICS_ADDR` (default `:8080`).
-
-### Scraping with Prometheus
-
-Add a scrape job to your Prometheus configuration:
-
-```yaml
-scrape_configs:
-  - job_name: "k8s-copycat"
-    static_configs:
-      - targets: ["k8s-copycat.default.svc:8080"]
-```
-
-The service publishes the following counters labelled by the image name:
-
-- `k8s_copycat_registry_pull_success_total{image="<name>"}`
-- `k8s_copycat_registry_pull_error_total{image="<name>"}`
-- `k8s_copycat_registry_push_success_total{image="<name>"}`
-- `k8s_copycat_registry_push_error_total{image="<name>"}`
-
-### Example Queries
-
-```promql
-sum by (image) (rate(k8s_copycat_registry_pull_success_total[5m]))
-```
-
-```promql
-sum(rate(k8s_copycat_registry_push_success_total[5m]))
-```
-
-```promql
-sum(rate(k8s_copycat_registry_push_error_total[5m]))
-```
-
-These queries reveal the busiest images, overall push throughput, and any spikes in failed pushes.
-
-## Contributing
-
-See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for the coding standards,
-linters, and Conventional Commits policy.
+- [estahn/k8s-image-swapper](https://github.com/estahn/k8s-image-swapper)
