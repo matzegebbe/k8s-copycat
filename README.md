@@ -49,7 +49,7 @@ We also needed a solution that **does not rely on admission webhooks** because o
 
 - Continuously mirrors workloads into ECR or any Docker-compatible registry
 - Supports namespace allow/deny lists, workload skip lists, and registry exclusions
-- Handles manifest lists, attestations, and multi-architecture images, mirroring only the platforms you specify via `mirrorPlatforms`
+- Handles manifest lists, attestations, and multi-architecture images, mirroring the platforms your workloads actually use and any extras you list in `mirrorPlatforms`
 - Provides templated repository prefixes to segregate mirrored content
 - Exposes Prometheus metrics for observability
 - Operates in dry-run modes to validate configuration before pushing
