@@ -530,6 +530,15 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		selectedFromIndex bool
 	)
 
+	if len(p.mirrorPlatforms) > 0 && len(desiredPlatforms) > 1 && !desc.MediaType.IsIndex() {
+		for _, spec := range desiredPlatforms[1:] {
+			log.Info(
+				fmt.Sprintf("image %s does not offer platform %s", src, spec.String()),
+				"platform", spec.String(),
+			)
+		}
+	}
+
 	switch {
 	case desc.MediaType.IsIndex() && p.pullByDigest && len(desiredPlatforms) > 1:
 		idx, err = desc.ImageIndex()
@@ -552,6 +561,12 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		} else {
 			idx = filtered
 			if len(missing) > 0 {
+				for _, spec := range missing {
+					log.Info(
+						fmt.Sprintf("image %s does not offer platform %s", src, spec.String()),
+						"platform", spec.String(),
+					)
+				}
 				log.Info(
 					"some configured mirrorPlatforms missing from source index", "missingPlatforms", specsToStrings(missing),
 				)
