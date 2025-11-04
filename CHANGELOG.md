@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.4](https://github.com/matzegebbe/k8s-copycat/compare/v0.4.3...v0.4.4) (2025-11-04)
+
+
+### Miscellaneous
+
+* **deps:** bump helm/kind-action from 1.12.0 to 1.13.0 ([#108](https://github.com/matzegebbe/k8s-copycat/issues/108)) ([98f6ffb](https://github.com/matzegebbe/k8s-copycat/commit/98f6ffbf72a016b0871a37acc5b3f7cbe533f8e1))
+* **deps:** bump sigs.k8s.io/controller-runtime in the go-patch group ([#109](https://github.com/matzegebbe/k8s-copycat/issues/109)) ([26cafe0](https://github.com/matzegebbe/k8s-copycat/commit/26cafe0410d1c348ee16071975adc14b180cf0c2))
+
 ## [0.4.3](https://github.com/matzegebbe/k8s-copycat/compare/v0.4.2...v0.4.3) (2025-11-03)
 
 
