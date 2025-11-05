@@ -66,6 +66,32 @@ At minimum you will need to:
 
 Once running, copycat begins replicating the images referenced by your workloads, respecting namespace and resource filters.
 
+### Quickstart with kind
+
+Spin up a throwaway [kind](https://kind.sigs.k8s.io/) cluster to see the controller in action without touching a shared environment:
+
+1. Create a cluster and deploy the manifests:
+
+   ```bash
+   kind create cluster --name copycat
+   kubectl apply -f manifests/k8s.yaml
+   ```
+
+2. Wait for the deployment to become ready and inspect the logs:
+
+   ```bash
+   kubectl wait --for=condition=available deployment/k8s-copycat -n k8s-copycat --timeout=120s
+   kubectl logs deployment/k8s-copycat -n k8s-copycat
+   ```
+
+3. Tear down the local cluster once finished:
+
+   ```bash
+   kind delete cluster --name copycat
+   ```
+
+The sample manifest runs in dry-run mode so the controller never attempts to push to a registry. Update the configuration before deploying copycat to a persistent environment.
+
 ## Configuration
 
 Copycat is configured through a combination of environment variables and a YAML configuration file. Any values defined in the environment override what is present in the config file, allowing safe secret management in Kubernetes.
@@ -221,6 +247,33 @@ Rules are evaluated in order, with the first matching entry applied. Leaving `pa
 
 The `registryCredentials` section (or matching environment variables) lets copycat authenticate against private registries while mirroring into your target. Credentials can be supplied directly in the configuration file via `username`, `password`, or `token`, but referencing secret values through environment variables (`*Env` fields) is recommended. When a token is provided it is sent as an authentication bearer token; otherwise basic authentication is used.
 
+## Observability
+
+Copycat exposes Prometheus metrics on `/metrics`. The listener binds to the address configured via `METRICS_ADDR` (default `:8080`).
+
+Add a scrape job similar to the following to pull metrics into your Prometheus stack:
+
+```yaml
+scrape_configs:
+  - job_name: "k8s-copycat"
+    static_configs:
+      - targets: ["k8s-copycat.default.svc:8080"]
+```
+
+Useful queries include:
+
+```promql
+sum by (image) (rate(k8s_copycat_registry_pull_success_total[5m]))
+```
+
+```promql
+sum(rate(k8s_copycat_registry_push_success_total[5m]))
+```
+
+```promql
+sum(rate(k8s_copycat_registry_push_error_total[5m]))
+```
+
 ## Troubleshooting mirrors
 
 When you mirror or verify batches of image references—tags, digests, manifest lists, or attestations—transient errors should not block progress. If a particular reference fails to pull or push (missing credentials, non-runnable attestation, registry hiccup), skip it and continue. Copycat follows the same pattern internally: failures are recorded and retried later without preventing other objects from being mirrored. Emulate that workflow during manual checks by circling back once credentials or permissions have been corrected.
@@ -228,3 +281,7 @@ When you mirror or verify batches of image references—tags, digests, manifest 
 ## Inspiration
 
 - [estahn/k8s-image-swapper](https://github.com/estahn/k8s-image-swapper)
+
+## Contributing
+
+See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for coding standards, linting requirements, and the Conventional Commits policy that keeps release automation happy.

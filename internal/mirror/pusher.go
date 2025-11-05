@@ -531,12 +531,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	)
 
 	if len(p.mirrorPlatforms) > 0 && len(desiredPlatforms) > 1 && !desc.MediaType.IsIndex() {
-		for _, spec := range desiredPlatforms[1:] {
-			log.Info(
-				fmt.Sprintf("image %s does not offer platform %s", src, spec.String()),
-				"platform", spec.String(),
-			)
-		}
+		logUnavailablePlatforms(log, src, desiredPlatforms[1:])
 	}
 
 	switch {
@@ -561,12 +556,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		} else {
 			idx = filtered
 			if len(missing) > 0 {
-				for _, spec := range missing {
-					log.Info(
-						fmt.Sprintf("image %s does not offer platform %s", src, spec.String()),
-						"platform", spec.String(),
-					)
-				}
+				logUnavailablePlatforms(log, src, missing)
 				log.Info(
 					"some configured mirrorPlatforms missing from source index", "missingPlatforms", specsToStrings(missing),
 				)
@@ -1221,6 +1211,27 @@ func specsToStrings(specs []platformSpec) []string {
 		out = append(out, spec.String())
 	}
 	return out
+}
+
+func logUnavailablePlatforms(logger logr.Logger, src string, specs []platformSpec) {
+	if len(specs) == 0 {
+		return
+	}
+	seen := make(map[string]struct{}, len(specs))
+	for _, spec := range specs {
+		platform := spec.String()
+		if platform == "" {
+			continue
+		}
+		if _, alreadyLogged := seen[platform]; alreadyLogged {
+			continue
+		}
+		logger.Info(
+			fmt.Sprintf("image %s does not offer platform %s", src, platform),
+			"platform", platform,
+		)
+		seen[platform] = struct{}{}
+	}
 }
 
 func shouldMirrorEntireIndex(mediaType types.MediaType, pullByDigest bool, platform *v1.Platform) bool {
