@@ -33,6 +33,8 @@ var (
 	remoteHeadFunc       = remote.Head
 	remoteWriteFunc      = remote.Write
 	remoteWriteIndexFunc = remote.WriteIndex
+	remoteImageFunc      = remote.Image
+	remoteIndexFunc      = remote.Index
 )
 
 type Pusher interface {
@@ -542,7 +544,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			metrics.RecordPullError(src)
 			return p.failureResult(target, fmt.Errorf("load index %s: %w", src, err))
 		}
-		filtered, matched, missing, filterErr := p.filterIndexByPlatforms(idx, desiredPlatforms)
+		filtered, matched, missing, filterErr := p.filterIndexByPlatforms(ctx, log, idx, desiredPlatforms, targetRef.Context(), auth, opts)
 		if filterErr != nil {
 			logRegistryAuthError(log, filterErr, "pull")
 			metrics.RecordPullError(src)
@@ -561,7 +563,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 					"some configured mirrorPlatforms missing from source index", "missingPlatforms", specsToStrings(missing),
 				)
 			}
-			log.Info(
+			log.V(1).Info(
 				"mirroring configured subset of multi-architecture index",
 				"platforms", specsToStrings(matched),
 			)
@@ -1145,7 +1147,15 @@ func (p *pusher) desiredPlatforms(metaPlatform *v1.Platform) []platformSpec {
 	return desired
 }
 
-func (p *pusher) filterIndexByPlatforms(idx v1.ImageIndex, desired []platformSpec) (v1.ImageIndex, []platformSpec, []platformSpec, error) {
+func (p *pusher) filterIndexByPlatforms(
+	ctx context.Context,
+	logger logr.Logger,
+	idx v1.ImageIndex,
+	desired []platformSpec,
+	targetRepo name.Repository,
+	auth authn.Authenticator,
+	nameOpts []name.Option,
+) (v1.ImageIndex, []platformSpec, []platformSpec, error) {
 	manifest, err := idx.IndexManifest()
 	if err != nil {
 		return nil, nil, nil, err
@@ -1162,7 +1172,7 @@ func (p *pusher) filterIndexByPlatforms(idx v1.ImageIndex, desired []platformSpe
 			missing = append(missing, spec)
 			continue
 		}
-		appendable, appendErr := appendableForDescriptor(idx, desc)
+		appendable, appendErr := p.appendableForFilteredDescriptor(ctx, logger, idx, desc, spec, targetRepo, auth, nameOpts)
 		if appendErr != nil {
 			return nil, nil, nil, appendErr
 		}
@@ -1184,6 +1194,77 @@ func appendableForDescriptor(idx v1.ImageIndex, desc *v1.Descriptor) (mutate.App
 		return idx.ImageIndex(desc.Digest)
 	}
 	return idx.Image(desc.Digest)
+}
+
+func (p *pusher) appendableForFilteredDescriptor(
+	ctx context.Context,
+	logger logr.Logger,
+	idx v1.ImageIndex,
+	desc *v1.Descriptor,
+	spec platformSpec,
+	targetRepo name.Repository,
+	auth authn.Authenticator,
+	nameOpts []name.Option,
+) (mutate.Appendable, error) {
+	if desc == nil {
+		return nil, fmt.Errorf("descriptor is nil")
+	}
+
+	if targetRepo != (name.Repository{}) {
+		digestName := fmt.Sprintf("%s@%s", targetRepo.Name(), desc.Digest.String())
+		targetDigestRef, err := name.NewDigest(digestName, nameOpts...)
+		if err != nil {
+			return nil, err
+		}
+
+		headCtx, cancelHead := p.operationContext(ctx)
+		_, headErr := remoteHeadFunc(targetDigestRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
+		cancelHead()
+
+		if headErr == nil {
+			logger.V(1).Info(
+				"platform-specific manifest already present at target",
+				"platform", spec.String(),
+				"digest", desc.Digest.String(),
+			)
+
+			fetchCtx, cancelFetch := p.operationContext(ctx)
+			fetchOpts := []remote.Option{
+				remote.WithAuth(auth),
+				remote.WithContext(fetchCtx),
+				remote.WithTransport(transport(p.target.Insecure())),
+			}
+
+			var appendable mutate.Appendable
+			if desc.MediaType.IsIndex() {
+				appendable, err = remoteIndexFunc(targetDigestRef, fetchOpts...)
+			} else {
+				appendable, err = remoteImageFunc(targetDigestRef, fetchOpts...)
+			}
+			cancelFetch()
+
+			if err == nil {
+				return appendable, nil
+			}
+
+			logger.V(1).Error(
+				err,
+				"unable to load platform manifest from target, falling back to source",
+				"platform", spec.String(),
+				"digest", desc.Digest.String(),
+			)
+		} else if te, ok := headErr.(*remotetransport.Error); ok {
+			if te.StatusCode != http.StatusNotFound {
+				logger.V(1).Error(headErr, "target platform manifest check failed", "platform", spec.String(), "digest", desc.Digest.String())
+				return nil, fmt.Errorf("check platform %s: %w", spec.String(), headErr)
+			}
+		} else if headErr != nil {
+			logger.V(1).Error(headErr, "target platform manifest check failed", "platform", spec.String(), "digest", desc.Digest.String())
+			return nil, fmt.Errorf("check platform %s: %w", spec.String(), headErr)
+		}
+	}
+
+	return appendableForDescriptor(idx, desc)
 }
 
 func findDescriptorForSpec(manifest *v1.IndexManifest, spec platformSpec) *v1.Descriptor {
