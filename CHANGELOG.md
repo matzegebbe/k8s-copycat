@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.4.4...v0.5.0) (2025-11-05)
+
+
+### Features
+
+* avoid redundant pulls when mirroring platform subsets ([#116](https://github.com/matzegebbe/k8s-copycat/issues/116)) ([c8bad26](https://github.com/matzegebbe/k8s-copycat/commit/c8bad26942b5c16d53bbf7936043d7ff7b4456d9))
+
+
+### Documentation
+
+* add quickstart and observability guidance ([#115](https://github.com/matzegebbe/k8s-copycat/issues/115)) ([b1709c0](https://github.com/matzegebbe/k8s-copycat/commit/b1709c0980bf781a5912c53e2f7b290047a4df40))
+
+
+### Miscellaneous
+
+* **deps:** bump the go-patch group with 3 updates ([#113](https://github.com/matzegebbe/k8s-copycat/issues/113)) ([9547740](https://github.com/matzegebbe/k8s-copycat/commit/9547740bcebf0e1b5d454a4739061ff2b764b6d5))
+
 ## [0.4.4](https://github.com/matzegebbe/k8s-copycat/compare/v0.4.3...v0.4.4) (2025-11-04)
 
 
