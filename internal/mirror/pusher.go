@@ -430,6 +430,18 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	auth := &authn.Basic{Username: username, Password: password}
 
+	metaPlatform := platformFromMetadata(meta)
+	desiredPlatforms := p.desiredPlatforms(metaPlatform)
+	primaryPlatform := metaPlatform
+	if len(desiredPlatforms) > 0 {
+		primaryPlatform = desiredPlatforms[0].toPlatform()
+	}
+
+	requestPlatform := primaryPlatform
+	if len(desiredPlatforms) > 1 {
+		requestPlatform = nil
+	}
+
 	if p.pullByDigest && havePodDigest {
 		var digestRef name.Reference
 		if existingDigest, ok := targetRef.(name.Digest); ok && strings.EqualFold(existingDigest.DigestStr(), podDigestStr) {
@@ -481,16 +493,47 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	var desc *remote.Descriptor
 	descCancel := func() {}
 
-	metaPlatform := platformFromMetadata(meta)
-	desiredPlatforms := p.desiredPlatforms(metaPlatform)
-	primaryPlatform := metaPlatform
-	if len(desiredPlatforms) > 0 {
-		primaryPlatform = desiredPlatforms[0].toPlatform()
-	}
-
-	requestPlatform := primaryPlatform
-	if len(desiredPlatforms) > 1 {
-		requestPlatform = nil
+	if p.pullByDigest && !havePodDigest && len(p.mirrorPlatforms) == 0 {
+		headCtx, cancelHead := p.operationContext(ctx)
+		targetHead, headErr := remoteHeadFunc(
+			targetRef,
+			remote.WithAuth(auth),
+			remote.WithContext(headCtx),
+			remote.WithTransport(transport(p.target.Insecure())),
+		)
+		cancelHead()
+		switch {
+		case headErr == nil:
+			sourceHeadCtx, cancelSourceHead := p.operationContext(ctx)
+			headOpts := []remote.Option{
+				remote.WithContext(sourceHeadCtx),
+				remote.WithAuthFromKeychain(p.keychain),
+				remote.WithTransport(transport(p.target.Insecure())),
+			}
+			if requestPlatform != nil {
+				headOpts = append(headOpts, remote.WithPlatform(*requestPlatform))
+			}
+			sourceHead, sourceHeadErr := remoteHeadFunc(pullRef, headOpts...)
+			cancelSourceHead()
+			if sourceHeadErr != nil {
+				logRegistryAuthError(log, sourceHeadErr, "pull descriptor head")
+				break
+			}
+			if targetHead != nil && sourceHead != nil && targetHead.Digest != (v1.Hash{}) && targetHead.Digest == sourceHead.Digest {
+				if p.dryRun {
+					log.V(1).Info("image already present at target", "digest", sourceHead.Digest.String(), "dryRun", true, "result", "skipped")
+				} else {
+					log.V(1).Info("image already present at target", "digest", sourceHead.Digest.String())
+				}
+				return nil
+			}
+		case headErr != nil:
+			if te, ok := headErr.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
+				// target image absent; continue with pull
+				break
+			}
+			logRegistryAuthError(log, headErr, "target preflight check")
+		}
 	}
 
 	if spec, ok := specFromPlatform(metaPlatform); ok && len(p.mirrorPlatformSet) > 0 {
