@@ -219,6 +219,7 @@ config:
   skipNames:
     deployments: []
     statefulSets: []
+    daemonSets: []
     jobs: []
     cronJobs: []
     pods: []
@@ -237,4 +238,5 @@ config:
     repoPrefix: ""
     insecure: true
   registryCredentials: []
+  pathMap: []
 
