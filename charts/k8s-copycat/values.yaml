@@ -208,11 +208,11 @@ config:
   dryRun: true
   dryPull: true
   includeNamespaces:
-    - test
+    - k8s-copycat
   digestPull: false
   checkNodePlatform: false
   mirrorPlatforms: []
-  allowDifferentDigestRepush: false
+  allowDifferentDigestRepush: true
   excludeRegistries: []
   watchResources: []
   skipNamespaces: []
@@ -236,7 +236,6 @@ config:
   docker:
     registry: ""
     repoPrefix: ""
-    insecure: true
+    insecure: false
   registryCredentials: []
   pathMap: []
-

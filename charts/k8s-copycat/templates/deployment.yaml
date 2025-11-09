@@ -88,9 +88,6 @@ spec:
             - name: config
               mountPath: {{ .Values.configMap.mountPath }}
               readOnly: true
-              {{- with .Values.configMap.filename }}
-              subPath: {{ . }}
-              {{- end }}
 {{- end }}
 {{- with .Values.extraVolumeMounts }}
 {{ toYaml . | indent 12 }}

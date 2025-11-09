@@ -234,6 +234,7 @@ ecr:
 ### Example configuration
 
 ```yaml
+targetKind: ecr                   # target aws ecr or default docker registry
 digestPull: true                  # resolve source tags to their immutable digest before pulling
 checkNodePlatform: true           # optional: ask the API for node architecture/OS before mirroring Pod images
 mirrorPlatforms:                  # optional: always mirror these additional platforms when digestPull is enabled
