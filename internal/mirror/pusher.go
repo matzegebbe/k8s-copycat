@@ -504,6 +504,9 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		cancelHead()
 		switch {
 		case headErr == nil:
+			if targetHead == nil || targetHead.Digest == (v1.Hash{}) {
+				break
+			}
 			sourceHeadCtx, cancelSourceHead := p.operationContext(ctx)
 			headOpts := []remote.Option{
 				remote.WithContext(sourceHeadCtx),
@@ -519,7 +522,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 				logRegistryAuthError(log, sourceHeadErr, "pull descriptor head")
 				break
 			}
-			if targetHead != nil && sourceHead != nil && targetHead.Digest != (v1.Hash{}) && targetHead.Digest == sourceHead.Digest {
+			if sourceHead != nil && targetHead.Digest == sourceHead.Digest {
 				if p.dryRun {
 					log.V(1).Info("image already present at target", "digest", sourceHead.Digest.String(), "dryRun", true, "result", "skipped")
 				} else {

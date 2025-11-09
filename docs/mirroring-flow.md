@@ -4,31 +4,35 @@
 flowchart TD
     A[Start mirror request] --> B{digestPull enabled?}
     B -- Yes --> C{Pod imageID includes digest?}
-    C -- No --> D[Skip reconciliation until digest is reported]
+    B -- No --> V[[See flow below]]
     C -- Yes --> E{checkNodePlatform enabled?}
+    C -- No --> D{Source reference already digest?}
+    D -- No --> X[Skip reconciliation until digest is reported]
+    D -- Yes --> I{mirrorPlatforms configured?}
     E -- Yes --> F[Look up node architecture/OS]
     E -- No --> G[Skip node lookup]
     F --> H{mirrorPlatforms configured?}
-    G --> I{mirrorPlatforms configured?}
+    G --> I
     H -- Yes --> J[Pull by digest and mirror configured platform subset]
     H -- No --> K[Pull by digest and select manifest matching node platform]
     I -- Yes --> J
-    I -- No --> L[Pull by digest and mirror entire index when descriptor is multi-arch]
-    J --> M{Image present in target?}
-    K --> M
-    L --> M
-    M -- No --> O[Ensure target repository exists]
-    M -- Yes --> N{Digest matches source?}
-    N -- Yes --> Z[End]
-    N -- No --> R{Allowed to overwrite different digest? latest tag or allowDifferentDigestRepush}
-    R -- No --> Q[Fail reconciliation and report mismatch]
-    R -- Yes --> O
-    O --> P[Push image manifest to target]
-    P --> S[Log push completion]
-    Q --> Z
-    D --> Z
-    S --> Z
-    B -- No --> T[[See flow below]]
+    I -- No --> L{Target already exposes matching digest?}
+    L -- Yes --> Z[End]
+    L -- No --> M[Pull by digest and mirror entire index when descriptor is multi-arch]
+    J --> N{Image present in target?}
+    K --> N
+    M --> N
+    N -- No --> P[Ensure target repository exists]
+    N -- Yes --> O{Digest matches source?}
+    O -- Yes --> Z
+    O -- No --> Q{Allowed to overwrite different digest? latest tag or allowDifferentDigestRepush}
+    Q -- No --> R[Fail reconciliation and report mismatch]
+    Q -- Yes --> P
+    P --> S[Push image manifest to target]
+    S --> T[Log push completion]
+    R --> Z
+    T --> Z
+    X --> Z
 
 ```
 
@@ -59,7 +63,7 @@ This flow chart summarizes how the pusher reconciles images when digest mirrorin
 
 ## Why “pull by digest” can still copy other variants
 
-When `digestPull` is enabled it might feel like the controller should only ever copy the single manifest identified by the digest the workload runs. In practice Kubernetes and container runtimes often publish the *index* digest for multi-architecture images, so additional context is required to avoid mirroring every variant.
+When `digestPull` is enabled it might feel like the controller should only ever copy the single manifest identified by the digest the workload runs. In practice Kubernetes and container runtimes often publish the *index* digest for multi-architecture images, so additional context is required to avoid mirroring every variant. When Copycat only has a digest reference (for example, the workload image already uses an `@sha256:` reference) but the pod has not reported its `ImageID` digest yet, the controller now checks the target registry first and skips contacting the source registry entirely if the digest already matches.
 
 ### Why other manifests are mirrored
 

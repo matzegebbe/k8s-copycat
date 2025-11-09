@@ -284,6 +284,58 @@ func TestMirrorSkipsSourcePullWhenTargetDigestMatches(t *testing.T) {
 	}
 }
 
+func TestMirrorContinuesPullWhenTargetDigestUnknown(t *testing.T) {
+	metrics.Reset()
+	t.Cleanup(metrics.Reset)
+
+	var headMu sync.Mutex
+	headCalls := 0
+
+	originalHead := remoteHeadFunc
+	remoteHeadFunc = func(ref name.Reference, _ ...remote.Option) (*v1.Descriptor, error) {
+		headMu.Lock()
+		defer headMu.Unlock()
+		headCalls++
+		if ref.Context().RegistryStr() != "example.com" {
+			t.Fatalf("unexpected remote head reference %q", ref.Context().RegistryStr())
+		}
+		return &v1.Descriptor{}, nil
+	}
+	t.Cleanup(func() { remoteHeadFunc = originalHead })
+
+	var getMu sync.Mutex
+	getCalls := 0
+
+	originalGet := remoteGetFunc
+	remoteGetFunc = func(name.Reference, ...remote.Option) (*remote.Descriptor, error) {
+		getMu.Lock()
+		getCalls++
+		getMu.Unlock()
+		return nil, errors.New("pull failed")
+	}
+	t.Cleanup(func() { remoteGetFunc = originalGet })
+
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, true, nil, nil)
+
+	source := "docker.io/library/nginx@sha256:" + strings.Repeat("a", 64)
+
+	if err := p.Mirror(context.Background(), source, Metadata{}); err == nil {
+		t.Fatalf("expected error from Mirror when source pull fails")
+	}
+
+	headMu.Lock()
+	if headCalls != 1 {
+		t.Fatalf("expected 1 remote head invocation, got %d", headCalls)
+	}
+	headMu.Unlock()
+
+	getMu.Lock()
+	if getCalls != 1 {
+		t.Fatalf("expected 1 remote get invocation, got %d", getCalls)
+	}
+	getMu.Unlock()
+}
+
 func TestMirrorRecordsPushErrorMetric(t *testing.T) {
 	metrics.Reset()
 	t.Cleanup(metrics.Reset)
