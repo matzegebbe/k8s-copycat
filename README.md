@@ -14,6 +14,7 @@ This is an **absolutely experimental WIP project**. Do **not** use it in product
 - [Why k8s-copycat?](#why-k8s-copycat)
 - [Key Capabilities](#key-capabilities)
 - [Getting Started](#getting-started)
+  - [Deploy with Helm](#deploy-with-helm)
 - [Configuration](#configuration)
   - [Environment variables](#environment-variables)
   - [Digest-based mirroring](#digest-based-mirroring)
@@ -91,6 +92,44 @@ Spin up a throwaway [kind](https://kind.sigs.k8s.io/) cluster to see the control
    ```
 
 The sample manifest runs in dry-run mode so the controller never attempts to push to a registry. Update the configuration before deploying copycat to a persistent environment.
+
+### Deploy with Helm
+
+The project publishes an official Helm chart to GitHub Container Registry (GHCR). The chart follows Helm best practices and exposes every controller configuration flag through `values.yaml` for easier automation.
+
+```bash
+helm registry login ghcr.io --username <github-username> --password <personal-access-token>
+helm install k8s-copycat oci://ghcr.io/matzegebbe/charts/k8s-copycat \n  --namespace k8s-copycat \n  --create-namespace \n  --version 0.5.0
+```
+
+Use `--set` or a custom values file to override any option listed in [`charts/k8s-copycat/values.yaml`](charts/k8s-copycat/values.yaml). When upgrading, specify the chart version that matches the tagged release you want to deploy.
+
+#### Test the chart locally
+
+You can validate the chart and smoke test it on a disposable cluster before publishing configuration changes:
+
+1. Install [Helm 3](https://helm.sh/docs/intro/install/) and (optionally) [kind](https://kind.sigs.k8s.io/) or another local Kubernetes distribution such as Minikube.
+2. Run static checks directly against the chart sources:
+   ```bash
+   helm lint charts/k8s-copycat
+   helm template k8s-copycat charts/k8s-copycat \
+     --values charts/k8s-copycat/values.yaml
+   ```
+3. Create a local cluster and perform a server-side dry run to catch Kubernetes validation errors:
+   ```bash
+   kind create cluster --name copycat
+   helm install k8s-copycat charts/k8s-copycat \
+     --namespace k8s-copycat \
+     --create-namespace \
+     --dry-run --debug
+   ```
+4. Drop the `--dry-run` flag to fully install the chart, verify the controller pod, and clean up when finished:
+   ```bash
+   helm install k8s-copycat charts/k8s-copycat --namespace k8s-copycat --create-namespace
+   kubectl get pods -n k8s-copycat
+   helm uninstall k8s-copycat -n k8s-copycat
+   kind delete cluster --name copycat
+   ```
 
 ## Configuration
 

@@ -1,0 +1,13 @@
+# Common Helm ignores
+.git/
+.github/
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+*.swp
+charts/
+Chart.lock
+Makefile
+README.md
+LICENSE

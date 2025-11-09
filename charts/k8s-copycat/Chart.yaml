@@ -1,0 +1,25 @@
+apiVersion: v2
+name: k8s-copycat
+description: Mirror Kubernetes workloads container images to a configurable target registry.
+type: application
+version: 0.5.0
+appVersion: "0.5.0"
+home: https://github.com/matzegebbe/k8s-copycat
+sources:
+  - https://github.com/matzegebbe/k8s-copycat
+keywords:
+  - kubernetes
+  - registry
+  - mirroring
+  - copycat
+maintainers:
+  - name: Matthias Gebbe
+    email: mail@matthiasgebbe.de
+icon: https://raw.githubusercontent.com/matzegebbe/k8s-copycat/main/k8s-copycat-logo.png
+kubeVersion: ">=1.22.0-0"
+annotations:
+  artifacthub.io/links: |
+    - name: Source
+      url: https://github.com/matzegebbe/k8s-copycat
+    - name: Documentation
+      url: https://github.com/matzegebbe/k8s-copycat#readme

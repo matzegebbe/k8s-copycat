@@ -1,0 +1,240 @@
+# -- Number of controller replicas to run
+replicaCount: 1
+
+image:
+  # -- Docker image repository
+  repository: ghcr.io/matzegebbe/k8s-copycat
+  # -- Overrides the image tag whose default is the chart appVersion
+  tag: "kind"
+  # -- Container pull policy
+  pullPolicy: IfNotPresent
+
+# -- Optional list of image pull secrets
+imagePullSecrets: []
+
+# -- Override the chart name
+nameOverride: ""
+# -- Override the generated release name
+fullnameOverride: ""
+
+commonLabels: {}
+commonAnnotations: {}
+
+namespace:
+  # -- Create the release namespace resource
+  create: false
+  # -- Additional namespace annotations
+  annotations: {}
+  # -- Additional namespace labels
+  labels: {}
+
+serviceAccount:
+  # -- Specifies whether a service account should be created
+  create: true
+  # -- Additional service account annotations
+  annotations: {}
+  # -- Additional service account labels
+  labels: {}
+  # -- The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+rbac:
+  # -- Specifies whether RBAC resources should be created
+  create: true
+  clusterRole:
+    # -- Additional annotations for the ClusterRole
+    annotations: {}
+    # -- Additional labels for the ClusterRole
+    labels: {}
+    # -- Custom RBAC rules for the controller. Defaults cover the supported Kubernetes resources.
+    rules:
+      - apiGroups: [""]
+        resources: ["pods"]
+        verbs: ["get", "list", "watch"]
+      - apiGroups: [""]
+        resources: ["namespaces"]
+        verbs: ["get", "list", "watch"]
+      - apiGroups: [""]
+        resources: ["nodes"]
+        verbs: ["get", "list", "watch"]
+      - apiGroups: ["apps"]
+        resources: ["deployments", "statefulsets", "replicasets", "daemonsets"]
+        verbs: ["get", "list", "watch"]
+      - apiGroups: ["batch"]
+        resources: ["jobs", "cronjobs"]
+        verbs: ["get", "list", "watch"]
+      - apiGroups: ["coordination.k8s.io"]
+        resources: ["leases"]
+        verbs: ["get", "list", "watch", "create", "update", "patch"]
+      - apiGroups: [""]
+        resources: ["events"]
+        verbs: ["create", "patch"]
+  clusterRoleBinding:
+    # -- Additional annotations for the ClusterRoleBinding
+    annotations: {}
+    # -- Additional labels for the ClusterRoleBinding
+    labels: {}
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+
+securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+
+# -- Optional priority class name
+priorityClassName: ""
+
+# -- Override default container command
+command: []
+# -- Additional container arguments
+args: []
+
+# -- Additional environment variables for the controller container
+extraEnv: []
+# -- Additional environment variables from ConfigMaps/Secrets
+extraEnvFrom: []
+
+# -- Additional volume mounts for the controller container
+extraVolumeMounts: []
+# -- Additional volumes for the pod
+extraVolumes: []
+
+containerPorts:
+  metrics: 8080
+  health: 8081
+
+# -- Controller container resources
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+livenessProbe:
+  enabled: true
+  httpGet:
+    path: /healthz
+    port: 8081
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 3
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 8080
+  targetPort: metrics
+  portName: http-metrics
+  annotations: {}
+  labels: {}
+
+readinessProbe:
+  enabled: true
+  httpGet:
+    path: /readyz
+    port: 8081
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 1
+  successThreshold: 1
+  failureThreshold: 3
+
+# -- Pod topology spread constraints
+podTopologySpreadConstraints: []
+# -- Node selector for pod assignment
+nodeSelector: {}
+# -- Tolerations for pod assignment
+tolerations: []
+# -- Affinity rules for pod assignment
+affinity: {}
+
+# -- Pod disruption budget configuration
+podDisruptionBudget:
+  enabled: false
+  labels: {}
+  annotations: {}
+  minAvailable: 1
+  maxUnavailable: null
+
+# -- Service monitor configuration for scraping metrics via Prometheus Operator
+serviceMonitor:
+  enabled: false
+  namespace: ""
+  annotations: {}
+  labels: {}
+  interval: 30s
+  scrapeTimeout: 10s
+  scheme: http
+  path: /metrics
+  namespaceSelector: null
+  tlsConfig: {}
+  relabelings: []
+  metricRelabelings: []
+  targetLabels: []
+
+configMap:
+  # -- Specifies whether the default ConfigMap should be created
+  create: true
+  # -- Use an existing ConfigMap instead of creating one
+  existingConfigMap: ""
+  # -- Additional ConfigMap annotations
+  annotations: {}
+  # -- Additional ConfigMap labels
+  labels: {}
+  # -- Name of the ConfigMap key containing the configuration
+  key: config.yaml
+  # -- File name rendered inside the mounted directory
+  filename: config.yaml
+  # -- Mount path for the configuration directory
+  mountPath: /config
+  # -- File mode for projected ConfigMap files
+  defaultMode: 420
+
+# -- Complete controller configuration. This map is rendered as YAML into config.yaml.
+config:
+  targetKind: docker
+  logLevel: debug
+  dryRun: true
+  dryPull: true
+  includeNamespaces:
+    - test
+  digestPull: false
+  checkNodePlatform: false
+  mirrorPlatforms: []
+  allowDifferentDigestRepush: false
+  excludeRegistries: []
+  watchResources: []
+  skipNamespaces: []
+  skipNames:
+    deployments: []
+    statefulSets: []
+    jobs: []
+    cronJobs: []
+    pods: []
+  maxConcurrentReconciles: 1
+  requestTimeout: 120
+  failureCooldownMinutes: null
+  forceReconcileMinutes: null
+  ecr:
+    accountID: ""
+    region: ""
+    repoPrefix: ""
+    createRepo: false
+    lifecyclePolicy: ""
+  docker:
+    registry: registry.test.svc.cluster.local:5000
+    repoPrefix: ""
+    insecure: true
+  registryCredentials: []
+
