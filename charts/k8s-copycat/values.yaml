@@ -5,7 +5,7 @@ image:
   # -- Docker image repository
   repository: ghcr.io/matzegebbe/k8s-copycat
   # -- Overrides the image tag whose default is the chart appVersion
-  tag: "kind"
+  tag: "v0.5.0"
   # -- Container pull policy
   pullPolicy: IfNotPresent
 
@@ -234,7 +234,7 @@ config:
     createRepo: false
     lifecyclePolicy: ""
   docker:
-    registry: registry.test.svc.cluster.local:5000
+    registry: ""
     repoPrefix: ""
     insecure: true
   registryCredentials: []
