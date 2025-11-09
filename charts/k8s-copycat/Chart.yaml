@@ -13,8 +13,8 @@ keywords:
   - mirroring
   - copycat
 maintainers:
-  - name: Matthias Gebbe
-    email: mail@matthiasgebbe.de
+  - name: Mathias Gebbe
+    email: mathias.gebbe@gmail.com
 icon: https://raw.githubusercontent.com/matzegebbe/k8s-copycat/main/k8s-copycat-logo.png
 kubeVersion: ">=1.22.0-0"
 annotations:
