@@ -6,13 +6,16 @@ on:
       - published
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
   publish:
     if: startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
+    concurrency:
+      group: helm-release-${{ github.event.release.tag_name }}
+      cancel-in-progress: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -22,6 +25,18 @@ jobs:
         with:
           version: v3.13.3
 
+      - name: Sync chart version with release tag
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "Setting chart version to $TAG"
+          sed -i -E "s/^version: .*/version: ${TAG} # replaced by CI/" charts/k8s-copycat/Chart.yaml
+          sed -i -E "s/^appVersion: .*/appVersion: \"${TAG}\" # replaced by CI/" charts/k8s-copycat/Chart.yaml
+
+      - name: Validate chart version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          grep -Eq "^version: ${TAG}([[:space:]]+#.*)?$" charts/k8s-copycat/Chart.yaml || { echo "Chart version mismatch"; cat charts/k8s-copycat/Chart.yaml; exit 1; }
+          grep -Eq "^appVersion: \"?${TAG}\"?([[:space:]]+#.*)?$" charts/k8s-copycat/Chart.yaml || { echo "appVersion mismatch"; cat charts/k8s-copycat/Chart.yaml; exit 1; }
       - name: Package chart
         run: |
           mkdir -p dist
@@ -29,10 +44,8 @@ jobs:
           helm package charts/k8s-copycat --destination dist
 
       - name: Login to GHCR
-        env:
-          CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "$CR_TOKEN" | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io --username ${{ github.actor }} --password-stdin
 
       - name: Push chart to GHCR
         run: |
