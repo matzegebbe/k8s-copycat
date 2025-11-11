@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.5.0...v0.5.1) (2025-11-11)
+
+
+### Documentation
+
+* add cross-account irsa guide ([#118](https://github.com/matzegebbe/k8s-copycat/issues/118)) ([e5c856e](https://github.com/matzegebbe/k8s-copycat/commit/e5c856ed425a2b06749cfa371659cfc387618ed3))
+
+
+### Miscellaneous
+
+* **deps:** bump github.com/aws/aws-sdk-go-v2/config ([#122](https://github.com/matzegebbe/k8s-copycat/issues/122)) ([760ee63](https://github.com/matzegebbe/k8s-copycat/commit/760ee63a0482f097d59f8f53b220f122655acd62))
+
 ## [0.5.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.4.4...v0.5.0) (2025-11-05)
 
 
