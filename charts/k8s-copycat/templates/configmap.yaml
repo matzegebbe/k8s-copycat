@@ -1,0 +1,23 @@
+{{- if and .Values.configMap.create (not .Values.configMap.existingConfigMap) }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "k8s-copycat.configMapName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "k8s-copycat.labels" . | indent 4 }}
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- with .Values.configMap.labels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- $annotations := merge (dict) (default (dict) .Values.commonAnnotations) (default (dict) .Values.configMap.annotations) }}
+{{- if $annotations }}
+  annotations:
+{{ toYaml $annotations | indent 4 }}
+{{- end }}
+data:
+  {{ .Values.configMap.key }}: |
+{{ include "k8s-copycat.renderConfig" . | indent 4 }}
+{{- end }}

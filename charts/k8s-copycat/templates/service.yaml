@@ -1,0 +1,29 @@
+{{- if .Values.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "k8s-copycat.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "k8s-copycat.labels" . | indent 4 }}
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- with .Values.service.labels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- $annotations := merge (dict) (default (dict) .Values.commonAnnotations) (default (dict) .Values.service.annotations) }}
+{{- if $annotations }}
+  annotations:
+{{ toYaml $annotations | indent 4 }}
+{{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+{{ include "k8s-copycat.selectorLabels" . | indent 4 }}
+  ports:
+    - name: {{ .Values.service.portName }}
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+{{- end }}

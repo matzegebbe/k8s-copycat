@@ -1,0 +1,19 @@
+{{- if and .Values.namespace.create (ne .Release.Namespace "kube-system") }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+{{ include "k8s-copycat.selectorLabels" . | indent 4 }}
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- with .Values.namespace.labels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- $annotations := merge (dict) (default (dict) .Values.commonAnnotations) (default (dict) .Values.namespace.annotations) }}
+{{- if $annotations }}
+  annotations:
+{{ toYaml $annotations | indent 4 }}
+{{- end }}
+{{- end }}

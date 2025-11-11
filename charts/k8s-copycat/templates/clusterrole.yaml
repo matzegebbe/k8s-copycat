@@ -1,0 +1,21 @@
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "k8s-copycat.fullname" . }}
+  labels:
+{{ include "k8s-copycat.labels" . | indent 4 }}
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- with .Values.rbac.clusterRole.labels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- $annotations := merge (dict) (default (dict) .Values.commonAnnotations) (default (dict) .Values.rbac.clusterRole.annotations) }}
+{{- if $annotations }}
+  annotations:
+{{ toYaml $annotations | indent 4 }}
+{{- end }}
+rules:
+{{ toYaml .Values.rbac.clusterRole.rules | indent 2 }}
+{{- end }}

@@ -1,0 +1,29 @@
+{{- if .Values.podDisruptionBudget.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "k8s-copycat.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+{{ include "k8s-copycat.labels" . | indent 4 }}
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- with .Values.podDisruptionBudget.labels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- $annotations := merge (dict) (default (dict) .Values.commonAnnotations) (default (dict) .Values.podDisruptionBudget.annotations) }}
+{{- if $annotations }}
+  annotations:
+{{ toYaml $annotations | indent 4 }}
+{{- end }}
+spec:
+  selector:
+    matchLabels:
+{{ include "k8s-copycat.selectorLabels" . | indent 6 }}
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- else if .Values.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- end }}
+{{- end }}

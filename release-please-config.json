@@ -4,21 +4,53 @@
   "include-v-in-tag": true,
   "bump-minor-pre-major": true,
   "changelog-sections": [
-    { "type": "feat", "section": "Features" },
-    { "type": "fix", "section": "Bug Fixes" },
-    { "type": "perf", "section": "Performance Improvements" },
-    { "type": "refactor", "section": "Refactoring" },
-    { "type": "docs", "section": "Documentation" },
-    { "type": "test", "section": "Tests" },
-    { "type": "build", "section": "Build System" },
-    { "type": "ci", "section": "Continuous Integration" },
-    { "type": "chore", "section": "Miscellaneous" }
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Bug Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance Improvements"
+    },
+    {
+      "type": "refactor",
+      "section": "Refactoring"
+    },
+    {
+      "type": "docs",
+      "section": "Documentation"
+    },
+    {
+      "type": "test",
+      "section": "Tests"
+    },
+    {
+      "type": "build",
+      "section": "Build System"
+    },
+    {
+      "type": "ci",
+      "section": "Continuous Integration"
+    },
+    {
+      "type": "chore",
+      "section": "Miscellaneous"
+    }
   ],
   "packages": {
     ".": {
       "package-name": "k8s-copycat",
       "release-type": "go",
       "changelog-path": "CHANGELOG.md"
+    },
+    "charts/k8s-copycat": {
+      "package-name": "k8s-copycat-chart",
+      "release-type": "helm",
+      "changelog-path": "charts/k8s-copycat/CHANGELOG.md"
     }
   }
 }

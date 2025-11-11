@@ -1,0 +1,4 @@
+😺 Thank you for installing {{ include "k8s-copycat.fullname" . }} 😺
+
+To verify the controller is running:
+  kubectl --namespace {{ .Release.Namespace }} get pods -l {{ include "k8s-copycat.selectorLabels" . | trim | replace "\n" ", " }}
