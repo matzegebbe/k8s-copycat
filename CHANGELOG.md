@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.6.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.5.0...v0.6.0) (2025-11-12)
+
+
+### Features
+
+* add Helm chart ([#121](https://github.com/matzegebbe/k8s-copycat/issues/121)) ([276921a](https://github.com/matzegebbe/k8s-copycat/commit/276921aac4386a97d39a08b03df77ef0a019af53))
+
+
+### Documentation
+
+* add cross-account irsa guide ([#118](https://github.com/matzegebbe/k8s-copycat/issues/118)) ([e5c856e](https://github.com/matzegebbe/k8s-copycat/commit/e5c856ed425a2b06749cfa371659cfc387618ed3))
+
+
+### Continuous Integration
+
+* align helm appVersion with release tags ([#124](https://github.com/matzegebbe/k8s-copycat/issues/124)) ([eb99af6](https://github.com/matzegebbe/k8s-copycat/commit/eb99af64b9cac586ceb86b866fa17f74f7af314c))
+
+
+### Miscellaneous
+
+* **deps:** bump actions/checkout from 4 to 5 ([#126](https://github.com/matzegebbe/k8s-copycat/issues/126)) ([626cd67](https://github.com/matzegebbe/k8s-copycat/commit/626cd671834fc62c3d0d7241cab70f35ddcaba12))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/config ([#122](https://github.com/matzegebbe/k8s-copycat/issues/122)) ([760ee63](https://github.com/matzegebbe/k8s-copycat/commit/760ee63a0482f097d59f8f53b220f122655acd62))
+* **deps:** bump softprops/action-gh-release from 1 to 2 ([#125](https://github.com/matzegebbe/k8s-copycat/issues/125)) ([176470e](https://github.com/matzegebbe/k8s-copycat/commit/176470e6b71db4099c52fec6208738d27a4c2aec))
+* **deps:** bump the go-patch group with 2 updates ([#127](https://github.com/matzegebbe/k8s-copycat/issues/127)) ([1d07624](https://github.com/matzegebbe/k8s-copycat/commit/1d07624b243365d6c5053d7ac7673ac2bb8e4e35))
+
 ## [0.5.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.4.4...v0.5.0) (2025-11-05)
 
 
