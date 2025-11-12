@@ -74,7 +74,8 @@ spec:
             - name: k8s-copycat-config
               mountPath: /config
               readOnly: true
-          image: ghcr.io/matzegebbe/k8s-copycat:kind
+          # Use the release tag you intend to deploy (matches the Helm chart appVersion)
+          image: ghcr.io/matzegebbe/k8s-copycat:v0.5.0
           imagePullPolicy: IfNotPresent
           #env:
             # choose one of: ecr | docker

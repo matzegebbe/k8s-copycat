@@ -27,16 +27,18 @@ jobs:
 
       - name: Sync chart version with release tag
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
-          echo "Setting chart version to $TAG"
+          RAW_TAG="${GITHUB_REF_NAME}"
+          TAG="${RAW_TAG#v}"
+          echo "Setting chart version to ${TAG} and appVersion to ${RAW_TAG}"
           sed -i -E "s/^version: .*/version: ${TAG} # replaced by CI/" charts/k8s-copycat/Chart.yaml
-          sed -i -E "s/^appVersion: .*/appVersion: \"${TAG}\" # replaced by CI/" charts/k8s-copycat/Chart.yaml
+          sed -i -E "s/^appVersion: .*/appVersion: \"${RAW_TAG}\" # replaced by CI/" charts/k8s-copycat/Chart.yaml
 
       - name: Validate chart version
         run: |
-          TAG="${GITHUB_REF_NAME#v}"
+          RAW_TAG="${GITHUB_REF_NAME}"
+          TAG="${RAW_TAG#v}"
           grep -Eq "^version: ${TAG}([[:space:]]+#.*)?$" charts/k8s-copycat/Chart.yaml || { echo "Chart version mismatch"; cat charts/k8s-copycat/Chart.yaml; exit 1; }
-          grep -Eq "^appVersion: \"?${TAG}\"?([[:space:]]+#.*)?$" charts/k8s-copycat/Chart.yaml || { echo "appVersion mismatch"; cat charts/k8s-copycat/Chart.yaml; exit 1; }
+          grep -Eq "^appVersion: \"?${RAW_TAG}\"?([[:space:]]+#.*)?$" charts/k8s-copycat/Chart.yaml || { echo "appVersion mismatch"; cat charts/k8s-copycat/Chart.yaml; exit 1; }
       - name: Package chart
         run: |
           mkdir -p dist
