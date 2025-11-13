@@ -11,7 +11,7 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
-    labels: ["deps", "ci"]
+    labels: ["dependencies", "ci"]
 
   - package-ecosystem: "gomod"
     directory: "/"
@@ -20,7 +20,7 @@ updates:
       time: "07:05"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 10
-    labels: ["deps", "go"]
+    labels: ["dependencies"]
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -40,7 +40,7 @@ updates:
       interval: "daily"
       time: "07:10"
       timezone: "Europe/Berlin"
-    labels: ["deps", "docker"]
+    labels: ["dependencies", "docker"]
     commit-message:
       prefix: "chore"
       include: "scope"
