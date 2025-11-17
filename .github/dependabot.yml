@@ -33,6 +33,10 @@ updates:
         applies-to: version-updates
         patterns: ["*"]
         update-types: ["minor"]
+      go-major:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: ["major"]
 
   - package-ecosystem: "docker"
     directory: "/"
