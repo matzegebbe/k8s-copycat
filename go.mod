@@ -3,7 +3,7 @@ module github.com/matzegebbe/k8s-copycat
 go 1.24.0
 
 require (
-	github.com/aws/aws-sdk-go-v2 v1.39.6
+	github.com/aws/aws-sdk-go-v2 v1.40.0
 	github.com/aws/aws-sdk-go-v2/config v1.31.20
 	github.com/aws/aws-sdk-go-v2/service/ecr v1.52.0
 	github.com/go-logr/logr v1.4.3
