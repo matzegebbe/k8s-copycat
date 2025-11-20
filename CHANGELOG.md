@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.6.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.6.0...v0.6.1) (2025-11-20)
+
+
+### Continuous Integration
+
+* fix release please ([#137](https://github.com/matzegebbe/k8s-copycat/issues/137)) ([7748663](https://github.com/matzegebbe/k8s-copycat/commit/7748663ef0a4c33705a866cd0e9a79a8a9dac849))
+
+
+### Miscellaneous
+
+* align dependabot labels ([#128](https://github.com/matzegebbe/k8s-copycat/issues/128)) ([2600dde](https://github.com/matzegebbe/k8s-copycat/commit/2600ddea8680246b035155c7dd755fa4df30ee77))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/config ([#135](https://github.com/matzegebbe/k8s-copycat/issues/135)) ([355250e](https://github.com/matzegebbe/k8s-copycat/commit/355250e7f841dd5c0d0b9fcd42b4af1b979fd403))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#131](https://github.com/matzegebbe/k8s-copycat/issues/131)) ([4abe167](https://github.com/matzegebbe/k8s-copycat/commit/4abe16743f078f57164423177e0d49dd958cf5a9))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#134](https://github.com/matzegebbe/k8s-copycat/issues/134)) ([055f1e1](https://github.com/matzegebbe/k8s-copycat/commit/055f1e150a4fd5b0761a4f9afac41c9abbc7d9fa))
+* **deps:** bump go.uber.org/zap in the go-patch group ([#133](https://github.com/matzegebbe/k8s-copycat/issues/133)) ([9f338bf](https://github.com/matzegebbe/k8s-copycat/commit/9f338bf1ab9b3d5baf2f543fb231f9a897e9e8ff))
+* **deps:** bump the go-patch group with 5 updates ([#130](https://github.com/matzegebbe/k8s-copycat/issues/130)) ([3fb85c4](https://github.com/matzegebbe/k8s-copycat/commit/3fb85c4c31553f8e742fc228a2dc41fe587028c4))
+* enable major go updates ([#132](https://github.com/matzegebbe/k8s-copycat/issues/132)) ([0c1bd6c](https://github.com/matzegebbe/k8s-copycat/commit/0c1bd6caf874ea9b973f1928d28c0a0610079a51))
+* release main ([#129](https://github.com/matzegebbe/k8s-copycat/issues/129)) ([652cb67](https://github.com/matzegebbe/k8s-copycat/commit/652cb67821fdfa83818ea5e934400ef1e2c9e48d))
+
 ## [0.6.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.6.0...v0.6.1) (2025-11-13)
 
 
