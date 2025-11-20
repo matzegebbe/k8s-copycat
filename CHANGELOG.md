@@ -19,14 +19,6 @@
 * enable major go updates ([#132](https://github.com/matzegebbe/k8s-copycat/issues/132)) ([0c1bd6c](https://github.com/matzegebbe/k8s-copycat/commit/0c1bd6caf874ea9b973f1928d28c0a0610079a51))
 * release main ([#129](https://github.com/matzegebbe/k8s-copycat/issues/129)) ([652cb67](https://github.com/matzegebbe/k8s-copycat/commit/652cb67821fdfa83818ea5e934400ef1e2c9e48d))
 
-## [0.6.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.6.0...v0.6.1) (2025-11-13)
-
-
-### Miscellaneous
-
-* align dependabot labels ([#128](https://github.com/matzegebbe/k8s-copycat/issues/128)) ([2600dde](https://github.com/matzegebbe/k8s-copycat/commit/2600ddea8680246b035155c7dd755fa4df30ee77))
-* **deps:** bump the go-patch group with 5 updates ([#130](https://github.com/matzegebbe/k8s-copycat/issues/130)) ([3fb85c4](https://github.com/matzegebbe/k8s-copycat/commit/3fb85c4c31553f8e742fc228a2dc41fe587028c4))
-
 ## [0.6.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.5.0...v0.6.0) (2025-11-12)
 
 
