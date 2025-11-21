@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.2](https://github.com/matzegebbe/k8s-copycat/compare/v0.6.1...v0.6.2) (2025-11-21)
+
+
+### Continuous Integration
+
+* modify for release please with helm ([8ef3a58](https://github.com/matzegebbe/k8s-copycat/commit/8ef3a587b902e81d044e285865925f08557a7356))
+
+
+### Miscellaneous
+
+* **deps:** bump actions/checkout from 5 to 6 ([#141](https://github.com/matzegebbe/k8s-copycat/issues/141)) ([7c8aee4](https://github.com/matzegebbe/k8s-copycat/commit/7c8aee46723582f40398de2a7d304b914e8127a6))
+
 ## [0.6.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.6.0...v0.6.1) (2025-11-20)
 
 
