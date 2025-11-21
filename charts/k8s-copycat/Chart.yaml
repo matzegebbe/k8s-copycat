@@ -3,7 +3,7 @@ name: k8s-copycat
 description: Mirror Kubernetes workloads container images to a configurable target registry.
 type: application
 # version fields are placeholders overwritten during release by .github/workflows/helm-release.yml
-version: 0.6.0 # replaced by CI
+version: 0.7.0 # replaced by CI
 appVersion: "v0.0.0" # replaced by CI
 home: https://github.com/matzegebbe/k8s-copycat
 sources:
