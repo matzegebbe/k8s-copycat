@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.3](https://github.com/matzegebbe/k8s-copycat/compare/v0.6.2...v0.6.3) (2025-11-24)
+
+
+### Miscellaneous
+
+* **deps:** bump github.com/aws/aws-sdk-go-v2/config ([#143](https://github.com/matzegebbe/k8s-copycat/issues/143)) ([db138bb](https://github.com/matzegebbe/k8s-copycat/commit/db138bb33d4d7b0b4575433520eafc3ebe4e1c93))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#144](https://github.com/matzegebbe/k8s-copycat/issues/144)) ([6018a28](https://github.com/matzegebbe/k8s-copycat/commit/6018a28f2d4ef2d4b974a6072ea4cf24893fe7ca))
+
 ## [0.6.2](https://github.com/matzegebbe/k8s-copycat/compare/v0.6.1...v0.6.2) (2025-11-21)
 
 
