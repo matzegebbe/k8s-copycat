@@ -47,13 +47,6 @@
       "component": "k8s-copycat",
       "release-type": "go",
       "changelog-path": "CHANGELOG.md"
-    },
-    "charts/k8s-copycat": {
-      "package-name": "k8s-copycat-chart",
-      "component": "k8s-copycat-chart",
-      "release-type": "helm",
-      "changelog-path": "charts/k8s-copycat/CHANGELOG.md",
-      "include-component-in-tag": true
     }
   }
 }
