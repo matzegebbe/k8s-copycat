@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.6.2...v0.7.0) (2025-11-26)
+
+
+### Features
+
+* remove helm chart / move to own project ([#147](https://github.com/matzegebbe/k8s-copycat/issues/147)) ([bb7cde1](https://github.com/matzegebbe/k8s-copycat/commit/bb7cde104fd3f8093eb2254df9b39af47c3daf7b))
+
 ## [0.6.3](https://github.com/matzegebbe/k8s-copycat/compare/v0.6.2...v0.6.3) (2025-11-24)
 
 
