@@ -16,5 +16,21 @@ jobs:
       - name: Run release-please
         uses: googleapis/release-please-action@v4
         with:
-          config-file: release-please-config.json
           token: ${{ secrets.RELEASE_PLEASE_PAT }}
+          release-type: go
+          package-name: k8s-copycat
+          include-component-in-tag: false
+          include-v-in-tag: true
+          bump-minor-pre-major: true
+          changelog-types: |
+            [
+              {"type":"feat","section":"Features"},
+              {"type":"fix","section":"Bug Fixes"},
+              {"type":"perf","section":"Performance Improvements"},
+              {"type":"refactor","section":"Refactoring"},
+              {"type":"docs","section":"Documentation"},
+              {"type":"test","section":"Tests"},
+              {"type":"build","section":"Build System"},
+              {"type":"ci","section":"Continuous Integration"},
+              {"type":"chore","section":"Miscellaneous"}
+            ]
