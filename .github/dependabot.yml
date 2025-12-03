@@ -9,7 +9,7 @@ updates:
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 5
     commit-message:
-      prefix: "chore"
+      prefix: "feat"
       include: "scope"
     labels: ["dependencies", "ci"]
 
@@ -22,7 +22,7 @@ updates:
     open-pull-requests-limit: 10
     labels: ["dependencies"]
     commit-message:
-      prefix: "chore"
+      prefix: "feat"
       include: "scope"
     groups:
       go-patch:
@@ -46,6 +46,6 @@ updates:
       timezone: "Europe/Berlin"
     labels: ["dependencies", "docker"]
     commit-message:
-      prefix: "chore"
+      prefix: "feat"
       include: "scope"
     open-pull-requests-limit: 5
