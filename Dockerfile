@@ -16,7 +16,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     GOARCH=${TARGETARCH:-amd64} \
     go build -trimpath -ldflags="-s -w" -o /out/k8s-copycat ./cmd/manager
 
-FROM alpine:3.22 AS certs
+FROM alpine:3.23 AS certs
 RUN apk --no-cache add ca-certificates
 
 FROM scratch
