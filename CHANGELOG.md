@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.7.0...v0.8.0) (2025-12-04)
+
+
+### Features
+
+* **deps:** bump alpine from 3.22 to 3.23 ([#154](https://github.com/matzegebbe/k8s-copycat/issues/154)) ([151056a](https://github.com/matzegebbe/k8s-copycat/commit/151056a6669c8d6c1102a7ccbd1c5ffc57549082))
+
 ## [0.7.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.6.2...v0.7.0) (2025-11-26)
 
 
