@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.10.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.9.0...v0.10.0) (2025-12-19)
+
+
+### Features
+
+* add config assume role in ECR client (fix [#117](https://github.com/matzegebbe/k8s-copycat/issues/117)) ([#166](https://github.com/matzegebbe/k8s-copycat/issues/166)) ([4a0a507](https://github.com/matzegebbe/k8s-copycat/commit/4a0a507aae848f90192a17480b9f787530bc5137))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#164](https://github.com/matzegebbe/k8s-copycat/issues/164)) ([0d307d9](https://github.com/matzegebbe/k8s-copycat/commit/0d307d98e9c3401b80fecfe6062a7ab99c361329))
+
 ## [0.9.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.8.0...v0.9.0) (2025-12-18)
 
 
