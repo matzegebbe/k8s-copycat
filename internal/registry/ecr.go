@@ -9,16 +9,19 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awscfg "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	ecr "github.com/aws/aws-sdk-go-v2/service/ecr"
 	"github.com/aws/aws-sdk-go-v2/service/ecr/types"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 type ECRConfig struct {
-	AccountID  string
-	Region     string
-	RepoPrefix string
-	CreateRepo bool
+	AccountID     string
+	Region        string
+	RepoPrefix    string
+	CreateRepo    bool
+	AssumeRoleArn string
 	// LifecyclePolicy contains optional policy JSON applied when repositories are created.
 	LifecyclePolicy string
 }
@@ -33,6 +36,11 @@ func NewECR(ctx context.Context, cfg ECRConfig) (Target, error) {
 	awsCfg, err := awscfg.LoadDefaultConfig(ctx, awscfg.WithRegion(cfg.Region))
 	if err != nil {
 		return nil, err
+	}
+	if cfg.AssumeRoleArn != "" {
+		stsClient := sts.NewFromConfig(awsCfg)
+		provider := stscreds.NewAssumeRoleProvider(stsClient, cfg.AssumeRoleArn)
+		awsCfg.Credentials = aws.NewCredentialsCache(provider)
 	}
 	c := ecr.NewFromConfig(awsCfg)
 	reg := fmt.Sprintf("%s.dkr.ecr.%s.amazonaws.com", cfg.AccountID, cfg.Region)

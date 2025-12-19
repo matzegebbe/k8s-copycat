@@ -116,6 +116,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 			Region:          eRegion,
 			RepoPrefix:      ePrefix,
 			CreateRepo:      eCreate,
+			AssumeRoleArn:   fileCfg.ECR.AssumeRoleArn,
 			LifecyclePolicy: fileCfg.ECR.LifecyclePolicy,
 		}
 		if cfg.AccountID == "" || cfg.Region == "" {

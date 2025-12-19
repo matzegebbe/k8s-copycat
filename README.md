@@ -115,7 +115,7 @@ Copycat is configured through a combination of environment variables and a YAML 
 **Target selection**
 
 - `TARGET_KIND`: `ecr` (default) or `docker`.
-- `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO`: configure AWS ECR mirroring.
+- `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO`, `AWS_ROLE_ARN`: configure AWS ECR mirroring.
 - `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD`, `TARGET_INSECURE`: configure other Docker registries.
 
 **Workload selection**
@@ -210,6 +210,28 @@ ecr:
 
 ```yaml
 targetKind: ecr                   # target aws ecr or default docker registry
+ecr:
+  accountID: "123456789012"
+  region: "us-west-2"
+  repoPrefix: "mirror/"
+  createRepo: true
+  assumeRoleArn: "arn:aws:iam::123456789012:role/CentralECRPushRole" # optional: STS assume-role on top of base credentials (including IRSA)
+  lifecyclePolicy: |-
+    {
+      "rules": [
+        {
+          "rulePriority": 1,
+          "description": "Keep last 5 images",
+          "selection": {
+            "tagStatus": "tagged",
+            "tagPrefixList": ["v"],
+            "countType": "imageCountMoreThan",
+            "countNumber": 5
+          },
+          "action": { "type": "expire" }
+        }
+      ]
+    }
 digestPull: true                  # resolve source tags to their immutable digest before pulling
 checkNodePlatform: true           # optional: ask the API for node architecture/OS before mirroring Pod images
 mirrorPlatforms:                  # optional: always mirror these additional platforms when digestPull is enabled

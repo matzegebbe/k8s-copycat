@@ -126,7 +126,7 @@ Provision an IAM role named `k8s-copycat-controller` in Account C with the same 
 
 ### Controller configuration
 
-In each workload account, configure k8s-copycat with the central registry details. Environment variables shown here are equivalent to setting the same values in the controller's config file.
+In each workload account, configure k8s-copycat with the central registry details. Environment variables shown here are equivalent to setting the same values in the controller's config file. If your service account already sets `AWS_ROLE_ARN` for IRSA, you can keep it and use `ecr.assumeRoleArn` to tell copycat which role to assume for ECR access.
 
 ```
 ECR_ACCOUNT_ID=111111111111
@@ -134,6 +134,14 @@ ECR_REPO_PREFIX=central-apps/
 AWS_REGION=us-east-1
 AWS_ROLE_ARN=arn:aws:iam::111111111111:role/CentralECRPushRole   # optional helper
 AWS_WEB_IDENTITY_TOKEN_FILE=/var/run/secrets/eks.amazonaws.com/serviceaccount/token
+```
+
+```yaml
+ecr:
+  accountID: "111111111111"
+  region: "us-east-1"
+  repoPrefix: "central-apps/"
+  assumeRoleArn: "arn:aws:iam::111111111111:role/CentralECRPushRole"
 ```
 
 With this setup, IRSA injects the base credentials into the k8s-copycat pods. The AWS SDK automatically assumes `CentralECRPushRole`, enabling both workload accounts to mirror images into the central ECR registry without modifying repository resource policies.
