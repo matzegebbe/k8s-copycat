@@ -17,6 +17,7 @@ type ECR struct {
 	Region          string `yaml:"region"`
 	RepoPrefix      string `yaml:"repoPrefix"`
 	CreateRepo      *bool  `yaml:"createRepo"`
+	AssumeRoleArn   string `yaml:"assumeRoleArn"`
 	LifecyclePolicy string `yaml:"lifecyclePolicy"`
 }
 
