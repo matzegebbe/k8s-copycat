@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.10.0...v0.11.0) (2026-01-12)
+
+
+### Features
+
+* **deps:** bump the go-patch group with 3 updates ([#167](https://github.com/matzegebbe/k8s-copycat/issues/167)) ([5ff5e6d](https://github.com/matzegebbe/k8s-copycat/commit/5ff5e6dee852d18f0c87b002389dc2aa33167249))
+
 ## [0.10.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.9.0...v0.10.0) (2025-12-19)
 
 
