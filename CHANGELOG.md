@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.11.0...v0.12.0) (2026-01-20)
+
+
+### Features
+
+* **deps:** bump sigs.k8s.io/controller-runtime from 0.22.4 to 0.23.0 ([#169](https://github.com/matzegebbe/k8s-copycat/issues/169)) ([64e2886](https://github.com/matzegebbe/k8s-copycat/commit/64e28867953832b0bf298fbf28e09dd98cfb39d2))
+
 ## [0.11.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.10.0...v0.11.0) (2026-01-12)
 
 
