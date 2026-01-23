@@ -46,3 +46,4 @@ make test
 ## Notes
 - The controller is configured via environment variables and/or a YAML config file; see `docs/` and `example/` for sample configuration.
 - Use the manifests under `manifests/` for cluster deployments and align the image tag with the release you intend to run.
+- The project follows Conventional Commits and Semantic Versioning for releases.
