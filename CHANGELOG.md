@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.12.0...v0.13.0) (2026-01-27)
+
+
+### Features
+
+* **deps:** bump sigs.k8s.io/controller-runtime in the go-patch group ([#172](https://github.com/matzegebbe/k8s-copycat/issues/172)) ([6c8c659](https://github.com/matzegebbe/k8s-copycat/commit/6c8c659af6439f8e591f4f75f15c737749e7d0bf))
+
 ## [0.12.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.11.0...v0.12.0) (2026-01-20)
 
 
