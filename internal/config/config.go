@@ -1,7 +1,6 @@
 package config
 
 import (
-	"io/fs"
 	"os"
 
 	"sigs.k8s.io/yaml"
@@ -85,7 +84,7 @@ func Load(path string) (Config, bool, error) {
 			return c, false, nil
 		}
 		// treat permission-denied as non-fatal not-found
-		if perr, ok := err.(*fs.PathError); ok && perr.Err != nil {
+		if os.IsPermission(err) {
 			return c, false, nil
 		}
 		return c, false, err

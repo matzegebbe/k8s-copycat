@@ -11,7 +11,7 @@ import (
 )
 
 func TestValidateAndExpandNamespaces(t *testing.T) {
-	client := fake.NewSimpleClientset(
+	client := fake.NewClientset(
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "default"}},
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-1"}},
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-2"}},

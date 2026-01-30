@@ -189,7 +189,7 @@ func (r *ForceReconciler) ForceReconcile(ctx context.Context) (int, int, error) 
 		switch res {
 		case ResourceDeployments:
 			var list appsv1.DeploymentList
-			if err := r.Client.List(ctx, &list); err != nil {
+			if err := r.List(ctx, &list); err != nil {
 				return workloads, images, err
 			}
 			for i := range list.Items {
@@ -208,7 +208,7 @@ func (r *ForceReconciler) ForceReconcile(ctx context.Context) (int, int, error) 
 			}
 		case ResourceStatefulSets:
 			var list appsv1.StatefulSetList
-			if err := r.Client.List(ctx, &list); err != nil {
+			if err := r.List(ctx, &list); err != nil {
 				return workloads, images, err
 			}
 			for i := range list.Items {
@@ -227,7 +227,7 @@ func (r *ForceReconciler) ForceReconcile(ctx context.Context) (int, int, error) 
 			}
 		case ResourceDaemonSets:
 			var list appsv1.DaemonSetList
-			if err := r.Client.List(ctx, &list); err != nil {
+			if err := r.List(ctx, &list); err != nil {
 				return workloads, images, err
 			}
 			for i := range list.Items {
@@ -246,7 +246,7 @@ func (r *ForceReconciler) ForceReconcile(ctx context.Context) (int, int, error) 
 			}
 		case ResourceJobs:
 			var list batchv1.JobList
-			if err := r.Client.List(ctx, &list); err != nil {
+			if err := r.List(ctx, &list); err != nil {
 				return workloads, images, err
 			}
 			for i := range list.Items {
@@ -265,7 +265,7 @@ func (r *ForceReconciler) ForceReconcile(ctx context.Context) (int, int, error) 
 			}
 		case ResourceCronJobs:
 			var list batchv1.CronJobList
-			if err := r.Client.List(ctx, &list); err != nil {
+			if err := r.List(ctx, &list); err != nil {
 				return workloads, images, err
 			}
 			for i := range list.Items {
@@ -284,7 +284,7 @@ func (r *ForceReconciler) ForceReconcile(ctx context.Context) (int, int, error) 
 			}
 		case ResourcePods:
 			var list corev1.PodList
-			if err := r.Client.List(ctx, &list); err != nil {
+			if err := r.List(ctx, &list); err != nil {
 				return workloads, images, err
 			}
 			for i := range list.Items {
