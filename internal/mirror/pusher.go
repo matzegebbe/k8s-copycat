@@ -490,8 +490,10 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		return desc, cancel, nil
 	}
 
-	var desc *remote.Descriptor
-	descCancel := func() {}
+	var (
+		desc       *remote.Descriptor
+		descCancel context.CancelFunc
+	)
 
 	if p.pullByDigest && !havePodDigest && len(p.mirrorPlatforms) == 0 {
 		headCtx, cancelHead := p.operationContext(ctx)

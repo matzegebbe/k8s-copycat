@@ -51,7 +51,7 @@ func init() {
 	ctrlmetrics.Registry.MustRegister(pullSuccess, pullError, pushSuccess, pushError)
 }
 
-// RecordPullSuccess increments the pull success counter for the provided image.
+// recordMetric increments the given counter for the provided image.
 func recordMetric(counter *prometheus.CounterVec, image string) {
 	if image == "" {
 		return
