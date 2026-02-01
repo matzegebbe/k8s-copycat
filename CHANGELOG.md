@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.13.0...v0.14.0) (2026-02-01)
+
+
+### Features
+
+* address multiple code quality and correctness issues and add claude agent ([#174](https://github.com/matzegebbe/k8s-copycat/issues/174)) ([c38382b](https://github.com/matzegebbe/k8s-copycat/commit/c38382bb8d9c4e4a97df0e93151d4ddb3fc3859b))
+
 ## [0.13.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.12.0...v0.13.0) (2026-01-27)
 
 
