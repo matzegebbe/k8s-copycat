@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.15.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.14.0...v0.15.0) (2026-02-11)
+
+
+### Features
+
+* **deps:** bump golang from 1.25 to 1.26 ([#178](https://github.com/matzegebbe/k8s-copycat/issues/178)) ([629117e](https://github.com/matzegebbe/k8s-copycat/commit/629117e62edfd397008280f8d6a318f01448ee4c))
+* **deps:** bump the go-patch group with 3 updates ([#177](https://github.com/matzegebbe/k8s-copycat/issues/177)) ([cadeb7b](https://github.com/matzegebbe/k8s-copycat/commit/cadeb7b1c032440356139f881d6b9aa4a1066c7f))
+
 ## [0.14.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.13.0...v0.14.0) (2026-02-01)
 
 
