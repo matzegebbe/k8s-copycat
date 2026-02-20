@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.16.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.15.0...v0.16.0) (2026-02-20)
+
+
+### Features
+
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#180](https://github.com/matzegebbe/k8s-copycat/issues/180)) ([47f8bfe](https://github.com/matzegebbe/k8s-copycat/commit/47f8bfef1c0958cb5b5c2f662dc6f7f0dfc791f0))
+* **deps:** bump github.com/google/go-containerregistry ([#185](https://github.com/matzegebbe/k8s-copycat/issues/185)) ([dab8718](https://github.com/matzegebbe/k8s-copycat/commit/dab87184eae1a50b347439eeacf16accfb4f1bda))
+* **deps:** bump the go-patch group with 2 updates ([#183](https://github.com/matzegebbe/k8s-copycat/issues/183)) ([b342ce4](https://github.com/matzegebbe/k8s-copycat/commit/b342ce4ff48dbe048e92beeacf4bdb9a5b6c632e))
+* **deps:** bump the go-patch group with 2 updates ([#184](https://github.com/matzegebbe/k8s-copycat/issues/184)) ([e10cfda](https://github.com/matzegebbe/k8s-copycat/commit/e10cfdaa6d63b272092cb9ad4b3ad4d156027fb0))
+
 ## [0.15.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.14.0...v0.15.0) (2026-02-11)
 
 
