@@ -38,7 +38,7 @@ jobs:
           load: true
           tags: k8s-copycat:ci
       - name: Create kind cluster
-        uses: helm/kind-action@v1.13.0
+        uses: helm/kind-action@v1.14.0
         with:
           cluster_name: copycat-ci
       - name: Load controller image into kind
