@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.17.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.16.0...v0.17.0) (2026-03-04)
+
+
+### Features
+
+* **deps:** bump github.com/google/go-containerregistry ([#190](https://github.com/matzegebbe/k8s-copycat/issues/190)) ([b6a243e](https://github.com/matzegebbe/k8s-copycat/commit/b6a243efea6bbb69239393ee3fda33053ec5ab59))
+* **deps:** bump the go-patch group with 3 updates ([#188](https://github.com/matzegebbe/k8s-copycat/issues/188)) ([26d2f51](https://github.com/matzegebbe/k8s-copycat/commit/26d2f5144920637d5f37680e21f86c2862f79c68))
+* **deps:** bump the go-patch group with 5 updates ([#191](https://github.com/matzegebbe/k8s-copycat/issues/191)) ([e7af684](https://github.com/matzegebbe/k8s-copycat/commit/e7af6845a557d085086c8fa9fbee250d07355cae))
+
 ## [0.16.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.15.0...v0.16.0) (2026-02-25)
 
 
