@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.18.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.17.0...v0.18.0) (2026-03-06)
+
+
+### Features
+
+* **deps:** bump docker/build-push-action from 6 to 7 ([#197](https://github.com/matzegebbe/k8s-copycat/issues/197)) ([ce3677a](https://github.com/matzegebbe/k8s-copycat/commit/ce3677a0215d15d5931c446b9bab5f2b07ad5acf))
+* **deps:** bump docker/login-action from 3 to 4 ([#193](https://github.com/matzegebbe/k8s-copycat/issues/193)) ([ccc898c](https://github.com/matzegebbe/k8s-copycat/commit/ccc898cd2cccc1afb58994f1af4abfbee671a446))
+* **deps:** bump docker/metadata-action from 5 to 6 ([#195](https://github.com/matzegebbe/k8s-copycat/issues/195)) ([35d6180](https://github.com/matzegebbe/k8s-copycat/commit/35d61806d0ddc54b2ba871fee5ef2cc9cf8f4650))
+* **deps:** bump docker/setup-buildx-action from 3 to 4 ([#196](https://github.com/matzegebbe/k8s-copycat/issues/196)) ([3c1146d](https://github.com/matzegebbe/k8s-copycat/commit/3c1146d8458d0ab94849c144494d1a847e10757e))
+* **deps:** bump docker/setup-qemu-action from 3 to 4 ([#192](https://github.com/matzegebbe/k8s-copycat/issues/192)) ([6e1ad3e](https://github.com/matzegebbe/k8s-copycat/commit/6e1ad3ed7bbc273466a14fc8226a1db21b1e311b))
+* **deps:** bump sigs.k8s.io/controller-runtime in the go-patch group ([#198](https://github.com/matzegebbe/k8s-copycat/issues/198)) ([de2e9db](https://github.com/matzegebbe/k8s-copycat/commit/de2e9dbe6ac2e918d2412965be9c62b49aa3f2c4))
+
 ## [0.17.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.16.0...v0.17.0) (2026-03-04)
 
 
