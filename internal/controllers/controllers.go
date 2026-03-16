@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	defaultRetryDelay = 24 * time.Hour
+	defaultRetryDelay = time.Hour
 )
 
 // SkipConfig declares which namespaces or object names should be ignored by the controllers.

@@ -230,7 +230,7 @@ type pusher struct {
 	excludedRegistries         []string
 }
 
-const DefaultFailureCooldown = 24 * time.Hour
+const DefaultFailureCooldown = time.Hour
 
 var ErrInCooldown = errors.New("mirror: target is in failure cooldown")
 
@@ -473,7 +473,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			_, headErr := remoteHeadFunc(digestRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(p.targetTransport))
 			cancelHead()
 			if headErr == nil {
-				log.V(1).Info("image digest already present at target", "digest", podDigestStr, "result", "skipped")
+				log.Info("image digest already present at target", "digest", podDigestStr, "result", "skipped")
 				return nil
 			}
 			if te, ok := headErr.(*remotetransport.Error); ok && te.StatusCode == http.StatusNotFound {
@@ -538,9 +538,9 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			}
 			if sourceHead != nil && targetHead.Digest == sourceHead.Digest {
 				if p.dryRun {
-					log.V(1).Info("image already present at target", "digest", sourceHead.Digest.String(), "dryRun", true, "result", "skipped")
+					log.Info("image already present at target", "digest", sourceHead.Digest.String(), "dryRun", true, "result", "skipped")
 				} else {
-					log.V(1).Info("image already present at target", "digest", sourceHead.Digest.String())
+					log.Info("image already present at target", "digest", sourceHead.Digest.String())
 				}
 				return nil
 			}
@@ -744,9 +744,9 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	if headErr == nil {
 		if headDesc.Digest == srcDigest {
 			if p.dryRun {
-				log.V(1).Info("image already present at target", "digest", srcDigest.String(), "dryRun", true, "result", "skipped")
+				log.Info("image already present at target", "digest", srcDigest.String(), "dryRun", true, "result", "skipped")
 			} else {
-				log.V(1).Info("image already present at target", "digest", srcDigest.String())
+				log.Info("image already present at target", "digest", srcDigest.String())
 			}
 			return nil
 		}

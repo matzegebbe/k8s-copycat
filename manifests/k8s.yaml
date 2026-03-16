@@ -174,7 +174,7 @@ data:
     #   pods: ["custom-pod"]
     maxConcurrentReconciles: 1         # default: two workers per controller
     requestTimeout: 120                # seconds; set to 0 to disable per-request deadlines
-    # failureCooldownMinutes: 1440     # retry failed pushes after one day; set to 0 to disable the cooldown
+    # failureCooldownMinutes: 60       # retry failed pushes after one hour; set to 0 to disable the cooldown
     # forceReconcileMinutes: 60        # trigger a full resync every hour; set to 0 to disable the periodic resync
     #ecr:
     #  accountID: "123456789012"

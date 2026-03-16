@@ -142,7 +142,7 @@ Copycat is configured through a combination of environment variables and a YAML 
 **Operations and observability**
 
 - `REGISTRY_REQUEST_TIMEOUT`: timeout (in seconds) for individual pull/push operations (`120` by default).
-- `FAILURE_COOLDOWN_MINUTES`: wait time before retrying a failed mirror (`1440` by default, `0` disables the cooldown).
+- `FAILURE_COOLDOWN_MINUTES`: wait time before retrying a failed mirror (`60` by default, `0` disables the cooldown).
 - `METRICS_ADDR`: bind address for Prometheus metrics (`:8080` by default).
 - `MAX_CONCURRENT_RECONCILES`: overrides the worker count per controller (defaults to `2`).
 
