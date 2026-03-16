@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.18.0...v0.18.1) (2026-03-16)
+
+
+### Bug Fixes
+
+* address controller runtime issues ([#201](https://github.com/matzegebbe/k8s-copycat/issues/201)) ([43e1592](https://github.com/matzegebbe/k8s-copycat/commit/43e15924306bfbf6b612816e2fa1d01aaf0bb44d))
+
 ## [0.18.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.17.0...v0.18.0) (2026-03-16)
 
 
