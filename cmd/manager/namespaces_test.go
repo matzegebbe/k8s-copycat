@@ -35,11 +35,11 @@ func TestValidateAndExpandNamespaces(t *testing.T) {
 	}
 
 	expanded, err = validateAndExpandNamespaces(ctx, log, client, []string{"missing"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if err == nil {
+		t.Fatalf("expected missing namespace to return error")
 	}
-	if len(expanded) != 1 || expanded[0] != "missing" {
-		t.Fatalf("expected missing namespace to be returned, got %#v", expanded)
+	if expanded != nil {
+		t.Fatalf("expected no expanded namespaces on error, got %#v", expanded)
 	}
 
 	expanded, err = validateAndExpandNamespaces(ctx, log, client, []string{"*"})

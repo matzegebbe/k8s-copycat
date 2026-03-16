@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"strings"
+
 	"github.com/prometheus/client_golang/prometheus"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 )
@@ -13,7 +15,7 @@ var (
 			Name:      "pull_success_total",
 			Help:      "Total number of successful image pulls performed by k8s-copycat.",
 		},
-		[]string{"image"},
+		[]string{"registry"},
 	)
 
 	pullError = prometheus.NewCounterVec(
@@ -23,7 +25,7 @@ var (
 			Name:      "pull_error_total",
 			Help:      "Total number of failed image pulls performed by k8s-copycat.",
 		},
-		[]string{"image"},
+		[]string{"registry"},
 	)
 
 	pushSuccess = prometheus.NewCounterVec(
@@ -33,7 +35,7 @@ var (
 			Name:      "push_success_total",
 			Help:      "Total number of successful image pushes performed by k8s-copycat.",
 		},
-		[]string{"image"},
+		[]string{"registry"},
 	)
 
 	pushError = prometheus.NewCounterVec(
@@ -43,7 +45,7 @@ var (
 			Name:      "push_error_total",
 			Help:      "Total number of failed image pushes performed by k8s-copycat.",
 		},
-		[]string{"image"},
+		[]string{"registry"},
 	)
 )
 
@@ -53,10 +55,39 @@ func init() {
 
 // recordMetric increments the given counter for the provided image.
 func recordMetric(counter *prometheus.CounterVec, image string) {
-	if image == "" {
+	registry := registryLabel(image)
+	if registry == "" {
 		return
 	}
-	counter.WithLabelValues(image).Inc()
+	counter.WithLabelValues(registry).Inc()
+}
+
+func registryLabel(image string) string {
+	trimmed := strings.ToLower(strings.TrimSpace(image))
+	if trimmed == "" {
+		return ""
+	}
+
+	trimmed = strings.TrimPrefix(trimmed, "https://")
+	trimmed = strings.TrimPrefix(trimmed, "http://")
+
+	first := trimmed
+	if idx := strings.Index(trimmed, "/"); idx >= 0 {
+		first = trimmed[:idx]
+	} else {
+		return "docker.io"
+	}
+
+	first = strings.TrimSpace(first)
+	if first == "" {
+		return ""
+	}
+
+	if strings.Contains(first, ".") || strings.Contains(first, ":") || first == "localhost" {
+		return first
+	}
+
+	return "docker.io"
 }
 
 // RecordPullSuccess increments the pull success counter for the provided image.

@@ -83,10 +83,6 @@ func Load(path string) (Config, bool, error) {
 		if os.IsNotExist(err) {
 			return c, false, nil
 		}
-		// treat permission-denied as non-fatal not-found
-		if os.IsPermission(err) {
-			return c, false, nil
-		}
 		return c, false, err
 	}
 	if err := yaml.Unmarshal(b, &c); err != nil {

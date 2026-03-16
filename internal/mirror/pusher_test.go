@@ -230,7 +230,7 @@ func TestMirrorRecordsPullErrorMetric(t *testing.T) {
 		t.Fatalf("expected pull error from Mirror")
 	}
 
-	got := counterValue(t, metrics.PullErrorCounter().WithLabelValues("docker.io/library/nginx:latest"))
+	got := counterValue(t, metrics.PullErrorCounter().WithLabelValues("docker.io"))
 	if got != 1 {
 		t.Fatalf("expected pull_error_total to increment once, got %v", got)
 	}
@@ -270,17 +270,63 @@ func TestMirrorSkipsSourcePullWhenTargetDigestMatches(t *testing.T) {
 	t.Cleanup(func() { remoteGetFunc = originalGet })
 
 	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, true, nil, nil)
+	impl, ok := p.(*pusher)
+	if !ok {
+		t.Fatalf("expected *pusher, got %T", p)
+	}
 
 	source := "docker.io/library/nginx@sha256:" + strings.Repeat("a", 64)
 
 	if err := p.Mirror(context.Background(), source, Metadata{}); err != nil {
 		t.Fatalf("unexpected error from Mirror: %v", err)
 	}
+	if len(impl.pushed) != 0 {
+		t.Fatalf("expected in-flight state to be released after skip, got %d entries", len(impl.pushed))
+	}
 
 	mu.Lock()
 	defer mu.Unlock()
 	if headCalls != 2 {
 		t.Fatalf("expected 2 remote head invocations, got %d", headCalls)
+	}
+}
+
+func TestMirrorRechecksTargetAfterSuccessfulSkip(t *testing.T) {
+	digest := v1.Hash{Algorithm: "sha256", Hex: strings.Repeat("b", 64)}
+
+	var mu sync.Mutex
+	headCalls := 0
+
+	originalHead := remoteHeadFunc
+	remoteHeadFunc = func(ref name.Reference, _ ...remote.Option) (*v1.Descriptor, error) {
+		mu.Lock()
+		defer mu.Unlock()
+		headCalls++
+		return &v1.Descriptor{Digest: digest}, nil
+	}
+	t.Cleanup(func() { remoteHeadFunc = originalHead })
+
+	originalGet := remoteGetFunc
+	remoteGetFunc = func(name.Reference, ...remote.Option) (*remote.Descriptor, error) {
+		t.Fatalf("unexpected remote get invocation")
+		return nil, nil
+	}
+	t.Cleanup(func() { remoteGetFunc = originalGet })
+
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, true, nil, nil)
+	source := "docker.io/library/nginx@sha256:" + strings.Repeat("b", 64)
+
+	if err := p.Mirror(context.Background(), source, Metadata{}); err != nil {
+		t.Fatalf("unexpected error from first Mirror call: %v", err)
+	}
+	if err := p.Mirror(context.Background(), source, Metadata{}); err != nil {
+		t.Fatalf("unexpected error from second Mirror call: %v", err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if headCalls != 4 {
+		t.Fatalf("expected two fresh target/source checks per call, got %d HEAD calls", headCalls)
 	}
 }
 
@@ -348,9 +394,34 @@ func TestMirrorRecordsPushErrorMetric(t *testing.T) {
 		t.Fatalf("expected push error from Mirror")
 	}
 
-	got := counterValue(t, metrics.PushErrorCounter().WithLabelValues("example.com/library/nginx:1.25"))
+	got := counterValue(t, metrics.PushErrorCounter().WithLabelValues("example.com"))
 	if got != 1 {
 		t.Fatalf("expected push_error_total to increment once, got %v", got)
+	}
+}
+
+func TestNewPusherSeparatesSourceAndTargetTransportSecurity(t *testing.T) {
+	p := NewPusher(fakeTarget{insecure: true}, false, false, nil, testr.New(t), nil, 0, 0, false, true, nil, nil)
+
+	impl, ok := p.(*pusher)
+	if !ok {
+		t.Fatalf("expected *pusher, got %T", p)
+	}
+
+	sourceTransport, ok := impl.sourceTransport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected source transport to be *http.Transport, got %T", impl.sourceTransport)
+	}
+	targetTransport, ok := impl.targetTransport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected target transport to be *http.Transport, got %T", impl.targetTransport)
+	}
+
+	if sourceTransport.TLSClientConfig == nil || sourceTransport.TLSClientConfig.InsecureSkipVerify {
+		t.Fatalf("expected source transport to keep TLS verification enabled")
+	}
+	if targetTransport.TLSClientConfig == nil || !targetTransport.TLSClientConfig.InsecureSkipVerify {
+		t.Fatalf("expected target transport to honor insecure target configuration")
 	}
 }
 
