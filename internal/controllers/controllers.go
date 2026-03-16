@@ -302,7 +302,11 @@ func (r *ForceReconciler) ForceReconcile(ctx context.Context) (int, int, error) 
 				if p.Status.Phase != corev1.PodPending && p.Status.Phase != corev1.PodRunning {
 					continue
 				}
-				mirrored, err := r.mirrorPodSpec(ctx, p.Namespace, p.Name, &p.Spec)
+				arch, os, err := r.nodePlatform(ctx, p)
+				if err != nil {
+					return workloads, images, err
+				}
+				mirrored, err := r.mirrorPodImages(ctx, p.Namespace, p.Name, util.ImagesFromPod(p), arch, os)
 				images += mirrored
 				if err != nil {
 					errs = append(errs, fmt.Errorf("pod %s/%s: %w", p.Namespace, p.Name, err))
@@ -397,6 +401,10 @@ func (r *baseReconciler) processPodSpec(ctx context.Context, ns, podName string,
 		return ctrl.Result{}, nil
 	}
 	_, err := r.mirrorPodSpec(ctx, ns, podName, spec)
+	return mirrorResultForError(err)
+}
+
+func mirrorResultForError(err error) (ctrl.Result, error) {
 	if err == nil {
 		return ctrl.Result{}, nil
 	}
@@ -551,7 +559,7 @@ func (r *PodReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.R
 		}
 		images := util.ImagesFromPod(&p)
 		if _, err := r.mirrorPodImages(ctx, p.Namespace, p.Name, images, arch, os); err != nil {
-			return ctrl.Result{}, err
+			return mirrorResultForError(err)
 		}
 	}
 	return ctrl.Result{}, nil
@@ -564,7 +572,7 @@ func (r *PodReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrent int) er
 		Complete(r)
 }
 
-func (r *PodReconciler) nodePlatform(ctx context.Context, pod *corev1.Pod) (string, string, error) {
+func (r *baseReconciler) nodePlatform(ctx context.Context, pod *corev1.Pod) (string, string, error) {
 	if !r.CheckNodePlatform {
 		return "", "", nil
 	}

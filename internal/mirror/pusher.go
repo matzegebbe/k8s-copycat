@@ -217,6 +217,8 @@ type pusher struct {
 	allowDifferentDigestRepush bool
 	mirrorPlatforms            []platformSpec
 	mirrorPlatformSet          map[string]struct{}
+	sourceTransport            http.RoundTripper
+	targetTransport            http.RoundTripper
 	mu                         sync.Mutex
 	pushed                     map[string]struct{}
 	logger                     logr.Logger
@@ -271,6 +273,10 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 	}
 	normalizedExclusions := normalizeExcludedRegistries(excluded)
 	parsedPlatforms, platformSet := parseMirrorPlatforms(logger, mirrorPlatforms)
+	targetInsecure := false
+	if t != nil {
+		targetInsecure = t.Insecure()
+	}
 
 	return &pusher{
 		target:                     t,
@@ -281,6 +287,8 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 		allowDifferentDigestRepush: allowDifferentDigestRepush,
 		mirrorPlatforms:            parsedPlatforms,
 		mirrorPlatformSet:          platformSet,
+		sourceTransport:            newTransport(false),
+		targetTransport:            newTransport(targetInsecure),
 		pushed:                     make(map[string]struct{}),
 		logger:                     logger,
 		keychain:                   keychain,
@@ -292,7 +300,7 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 	}
 }
 
-func transport(insecure bool) http.RoundTripper {
+func newTransport(insecure bool) http.RoundTripper {
 	d := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 	tlsCfg := &tls.Config{MinVersion: tls.VersionTLS12}
 	if insecure {
@@ -415,6 +423,10 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	} else if skip {
 		return nil
 	}
+	currentTarget := target
+	defer func() {
+		p.finishProcessing(currentTarget)
+	}()
 
 	username, password, err := p.target.BasicAuth(ctx)
 	if err != nil {
@@ -458,7 +470,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 		if digestRef != nil {
 			headCtx, cancelHead := p.operationContext(ctx)
-			_, headErr := remoteHeadFunc(digestRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
+			_, headErr := remoteHeadFunc(digestRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(p.targetTransport))
 			cancelHead()
 			if headErr == nil {
 				log.V(1).Info("image digest already present at target", "digest", podDigestStr, "result", "skipped")
@@ -477,7 +489,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		opts := []remote.Option{
 			remote.WithContext(descCtx),
 			remote.WithAuthFromKeychain(p.keychain),
-			remote.WithTransport(transport(p.target.Insecure())),
+			remote.WithTransport(p.sourceTransport),
 		}
 		if platform != nil {
 			opts = append(opts, remote.WithPlatform(*platform))
@@ -501,7 +513,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			targetRef,
 			remote.WithAuth(auth),
 			remote.WithContext(headCtx),
-			remote.WithTransport(transport(p.target.Insecure())),
+			remote.WithTransport(p.targetTransport),
 		)
 		cancelHead()
 		switch {
@@ -513,7 +525,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			headOpts := []remote.Option{
 				remote.WithContext(sourceHeadCtx),
 				remote.WithAuthFromKeychain(p.keychain),
-				remote.WithTransport(transport(p.target.Insecure())),
+				remote.WithTransport(p.sourceTransport),
 			}
 			if requestPlatform != nil {
 				headOpts = append(headOpts, remote.WithPlatform(*requestPlatform))
@@ -701,6 +713,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			repo = newRepo
 			target = newTarget
 			targetRef = newTargetRef
+			currentTarget = newTarget
 			log = reassignedLog
 		}
 	}
@@ -726,7 +739,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 	// Skip if image already exists in target registry with the same digest.
 	headCtx, cancelHead := p.operationContext(ctx)
-	headDesc, headErr := remoteHeadFunc(targetRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
+	headDesc, headErr := remoteHeadFunc(targetRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(p.targetTransport))
 	cancelHead()
 	if headErr == nil {
 		if headDesc.Digest == srcDigest {
@@ -789,7 +802,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			idx,
 			remote.WithAuth(auth),
 			remote.WithContext(pushCtx),
-			remote.WithTransport(transport(p.target.Insecure())),
+			remote.WithTransport(p.targetTransport),
 			remote.WithProgress(updates),
 		)
 	} else {
@@ -798,7 +811,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			img,
 			remote.WithAuth(auth),
 			remote.WithContext(pushCtx),
-			remote.WithTransport(transport(p.target.Insecure())),
+			remote.WithTransport(p.targetTransport),
 			remote.WithProgress(updates),
 		)
 	}
@@ -816,7 +829,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		targetRef,
 		remote.WithAuth(auth),
 		remote.WithContext(verifyCtx),
-		remote.WithTransport(transport(p.target.Insecure())),
+		remote.WithTransport(p.targetTransport),
 	)
 	cancelVerify()
 	switch {
@@ -898,7 +911,7 @@ type registryAuthError struct {
 
 func logRegistryAuthError(log logr.Logger, err error, phase string) {
 	if info, ok := detectRegistryAuthError(err); ok {
-		msg := fmt.Sprintf("authentication to target registry failed during %s", phase)
+		msg := fmt.Sprintf("registry authentication failed during %s", phase)
 		fields := []any{"statusCode", info.statusCode}
 		if len(info.diagnostics) > 0 {
 			fields = append(fields, "details", info.diagnostics)
@@ -1003,6 +1016,16 @@ func (p *pusher) beginProcessing(target string, log logr.Logger) (bool, error) {
 
 	p.pushed[target] = struct{}{}
 	return false, nil
+}
+
+func (p *pusher) finishProcessing(target string) {
+	if strings.TrimSpace(target) == "" {
+		return
+	}
+
+	p.mu.Lock()
+	delete(p.pushed, target)
+	p.mu.Unlock()
 }
 
 func (p *pusher) reassignProcessing(oldTarget, newTarget string, log logr.Logger) (bool, error) {
@@ -1266,7 +1289,7 @@ func (p *pusher) appendableForFilteredDescriptor(
 		}
 
 		headCtx, cancelHead := p.operationContext(ctx)
-		_, headErr := remoteHeadFunc(targetDigestRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(transport(p.target.Insecure())))
+		_, headErr := remoteHeadFunc(targetDigestRef, remote.WithAuth(auth), remote.WithContext(headCtx), remote.WithTransport(p.targetTransport))
 		cancelHead()
 
 		if headErr == nil {
@@ -1280,7 +1303,7 @@ func (p *pusher) appendableForFilteredDescriptor(
 			fetchOpts := []remote.Option{
 				remote.WithAuth(auth),
 				remote.WithContext(fetchCtx),
-				remote.WithTransport(transport(p.target.Insecure())),
+				remote.WithTransport(p.targetTransport),
 			}
 
 			var appendable mutate.Appendable

@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/matzegebbe/k8s-copycat/internal/mirror"
@@ -267,6 +268,101 @@ func TestMirrorPodImagesPropagatesPlatformMetadata(t *testing.T) {
 	}
 	if meta.OS != "linux" {
 		t.Fatalf("expected os linux, got %q", meta.OS)
+	}
+}
+
+func TestPodReconcilerUsesRetryCooldownResult(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add core scheme: %v", err)
+	}
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: "default"},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "app", Image: "docker.io/library/nginx:latest"}},
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+	}
+
+	retryAt := time.Now().Add(2 * time.Minute)
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(pod).Build()
+	reconciler := PodReconciler{baseReconciler{
+		Client:            client,
+		Pusher:            &recordingPusher{responses: []error{&mirror.RetryError{Cause: errors.New("temporary"), RetryAt: retryAt}}},
+		AllowedNamespaces: []string{"*"},
+	}}
+
+	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+		NamespacedName: types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace},
+	})
+	if err != nil {
+		t.Fatalf("expected retry to be converted into requeue, got error %v", err)
+	}
+	if result.RequeueAfter <= 0 {
+		t.Fatalf("expected positive requeue delay, got %v", result.RequeueAfter)
+	}
+	if result.RequeueAfter > 3*time.Minute {
+		t.Fatalf("expected bounded retry delay, got %v", result.RequeueAfter)
+	}
+}
+
+func TestForceReconcilePodsUsesPodImageStatusAndNodePlatform(t *testing.T) {
+	scheme := runtime.NewScheme()
+	if err := corev1.AddToScheme(scheme); err != nil {
+		t.Fatalf("add core scheme: %v", err)
+	}
+
+	node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "worker-1"}}
+	node.Status.NodeInfo.Architecture = "amd64"
+	node.Status.NodeInfo.OperatingSystem = "linux"
+
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{Name: "demo", Namespace: "default"},
+		Spec: corev1.PodSpec{
+			NodeName: "worker-1",
+			Containers: []corev1.Container{{
+				Name:  "app",
+				Image: "docker.io/library/nginx:latest",
+			}},
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+			ContainerStatuses: []corev1.ContainerStatus{{
+				Name:    "app",
+				ImageID: "containerd://docker.io/library/nginx@sha256:deadbeef",
+			}},
+		},
+	}
+
+	client := fake.NewClientBuilder().WithScheme(scheme).WithObjects(node, pod).Build()
+	pusher := &recordingPusher{}
+	reconciler := ForceReconciler{
+		baseReconciler: baseReconciler{
+			Client:            client,
+			Pusher:            pusher,
+			AllowedNamespaces: []string{"*"},
+			CheckNodePlatform: true,
+		},
+		watch: []ResourceType{ResourcePods},
+	}
+
+	workloads, mirrored, err := reconciler.ForceReconcile(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected force reconcile error: %v", err)
+	}
+	if workloads != 1 || mirrored != 1 {
+		t.Fatalf("expected one workload and one mirrored image, got workloads=%d mirrored=%d", workloads, mirrored)
+	}
+	if len(pusher.metas) != 1 {
+		t.Fatalf("expected exactly one mirrored metadata entry, got %d", len(pusher.metas))
+	}
+	meta := pusher.metas[0]
+	if meta.ImageID != "docker.io/library/nginx@sha256:deadbeef" {
+		t.Fatalf("expected pod imageID to be propagated, got %q", meta.ImageID)
+	}
+	if meta.Architecture != "amd64" || meta.OS != "linux" {
+		t.Fatalf("expected node platform metadata, got arch=%q os=%q", meta.Architecture, meta.OS)
 	}
 }
 
