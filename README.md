@@ -108,19 +108,19 @@ Use the published manifests rather than the `main` branch to avoid drift between
 
 ## Configuration
 
-Copycat is configured through a combination of environment variables and a YAML configuration file. Any values defined in the environment override what is present in the config file, allowing safe secret management in Kubernetes.
+Copycat is configured through a combination of environment variables and a YAML configuration file. Any values defined in the environment override what is present in the config file, allowing safe secret management in Kubernetes. A missing config file is treated as optional, but a config file that exists and cannot be read is now considered a startup error so broken mounts or file permissions do not silently fall back to defaults.
 
 ### Environment variables
 
 **Target selection**
 
 - `TARGET_KIND`: `ecr` (default) or `docker`.
-- `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO`, `AWS_ROLE_ARN`: configure AWS ECR mirroring.
+- `AWS_REGION`, `ECR_ACCOUNT_ID`, `ECR_REPO_PREFIX`, `ECR_CREATE_REPO`, `AWS_ROLE_ARN`: configure AWS ECR mirroring. Boolean flags such as `ECR_CREATE_REPO` use normal boolean parsing (`true`/`false`, `1`/`0`, etc.).
 - `TARGET_REGISTRY`, `TARGET_REPO_PREFIX`, `TARGET_USERNAME`, `TARGET_PASSWORD`, `TARGET_INSECURE`: configure other Docker registries.
 
 **Workload selection**
 
-- `INCLUDE_NAMESPACES`: `*` or a comma-separated list (for example `default,prod`).
+- `INCLUDE_NAMESPACES`: `*` or a comma-separated list (for example `default,prod`). Explicit namespace names are validated at startup so typos fail fast instead of silently narrowing or widening the watch set.
 - `SKIP_NAMESPACES`: namespaces that should never be mirrored.
 - `SKIP_DEPLOYMENTS`, `SKIP_STATEFULSETS`, `SKIP_DAEMONSETS`, `SKIP_JOBS`, `SKIP_CRONJOBS`, `SKIP_PODS`: workload names to ignore.
 - `WATCH_RESOURCES`: comma-separated resource types to watch (default `deployments,statefulsets,daemonsets,jobs,cronjobs,pods`).
@@ -286,7 +286,7 @@ The `registryCredentials` section (or matching environment variables) lets copyc
 
 ## Observability
 
-Copycat exposes Prometheus metrics on `/metrics`. The listener binds to the address configured via `METRICS_ADDR` (default `:8080`).
+Copycat exposes Prometheus metrics on `/metrics`. The listener binds to the address configured via `METRICS_ADDR` (default `:8080`). Metrics are intentionally labeled by registry rather than full image reference to keep series cardinality bounded; exact source and target image names remain available in the controller logs.
 
 Add a scrape job similar to the following to pull metrics into your Prometheus stack:
 
@@ -300,7 +300,7 @@ scrape_configs:
 Useful queries include:
 
 ```promql
-sum by (image) (rate(k8s_copycat_registry_pull_success_total[5m]))
+sum by (registry) (rate(k8s_copycat_registry_pull_success_total[5m]))
 ```
 
 ```promql

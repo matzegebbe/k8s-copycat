@@ -94,7 +94,7 @@ spec:
             #- name: ECR_CREATE_REPO
             #  value: "true"
             #- name: REGISTRY_REQUEST_TIMEOUT
-            #  value: "2m"
+            #  value: "120"
             #- name: DOCKERHUB_USERNAME
             #  valueFrom: { secretKeyRef: { name: registry-creds, key: dockerhub-username } }
             #- name: DOCKERHUB_PASSWORD
