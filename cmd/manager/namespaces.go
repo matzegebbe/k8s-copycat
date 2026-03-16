@@ -49,6 +49,7 @@ func validateAndExpandNamespaces(ctx context.Context, log logr.Logger, client ku
 	}
 
 	results := make(map[string]struct{}, len(normalized))
+	missing := make([]string, 0)
 	for _, sel := range normalized {
 		if hasWildcard(sel) {
 			matches, matchErr := matchNamespacePattern(sel, existing)
@@ -68,8 +69,14 @@ func validateAndExpandNamespaces(ctx context.Context, log logr.Logger, client ku
 
 		if _, ok := existingSet[sel]; !ok {
 			log.Error(fmt.Errorf("namespace %q does not exist", sel), "configured namespace missing", "namespace", sel)
+			missing = append(missing, sel)
+			continue
 		}
 		results[sel] = struct{}{}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return nil, fmt.Errorf("configured namespace(s) do not exist: %s", strings.Join(missing, ", "))
 	}
 
 	expanded := make([]string, 0, len(results))

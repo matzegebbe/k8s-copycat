@@ -123,6 +123,38 @@ func TestBuildKeychainFromConfigCustomAliasesAndWildcard(t *testing.T) {
 	}
 }
 
+func TestResolveOptionalBoolEnv(t *testing.T) {
+	t.Parallel()
+
+	value, ok, err := resolveOptionalBoolEnv("FALSE")
+	if err != nil {
+		t.Fatalf("unexpected error parsing bool env: %v", err)
+	}
+	if !ok || value {
+		t.Fatalf("expected FALSE to parse as present false, got ok=%v value=%v", ok, value)
+	}
+
+	value, ok, err = resolveOptionalBoolEnv("1")
+	if err != nil {
+		t.Fatalf("unexpected error parsing bool env: %v", err)
+	}
+	if !ok || !value {
+		t.Fatalf("expected 1 to parse as present true, got ok=%v value=%v", ok, value)
+	}
+
+	value, ok, err = resolveOptionalBoolEnv("   ")
+	if err != nil {
+		t.Fatalf("unexpected error parsing blank bool env: %v", err)
+	}
+	if ok || value {
+		t.Fatalf("expected blank bool env to be absent, got ok=%v value=%v", ok, value)
+	}
+
+	if _, _, err := resolveOptionalBoolEnv("not-a-bool"); err == nil {
+		t.Fatalf("expected invalid bool env to return error")
+	}
+}
+
 type fakeResource struct {
 	registry string
 }

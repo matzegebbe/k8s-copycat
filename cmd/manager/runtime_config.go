@@ -107,8 +107,10 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		if fileCfg.ECR.CreateRepo != nil {
 			eCreate = *fileCfg.ECR.CreateRepo
 		}
-		if v := os.Getenv("ECR_CREATE_REPO"); v == "false" {
-			eCreate = false
+		if resolved, ok, parseErr := resolveOptionalBoolEnv(os.Getenv("ECR_CREATE_REPO")); parseErr != nil {
+			return runtimeConfig{}, fmt.Errorf("parse ecr create repo: %w", parseErr)
+		} else if ok {
+			eCreate = resolved
 		}
 
 		cfg := registry.ECRConfig{
@@ -300,6 +302,18 @@ func durationFromMinutes(minutes int) time.Duration {
 		return 0
 	}
 	return time.Duration(minutes) * time.Minute
+}
+
+func resolveOptionalBoolEnv(value string) (bool, bool, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return false, false, nil
+	}
+	parsed, err := strconv.ParseBool(trimmed)
+	if err != nil {
+		return false, false, err
+	}
+	return parsed, true, nil
 }
 
 func resolveAllowedNamespaces(envVal string, configValues []string) []string {
