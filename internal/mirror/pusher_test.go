@@ -554,8 +554,6 @@ func TestMirrorPopulatesRegistryMetadataFromSource(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			originalGet := remoteGetFunc
 			remoteGetFunc = func(ref name.Reference, _ ...remote.Option) (*remote.Descriptor, error) {
-				// Capture is called with the source ref; we need the target.
-				// Instead, record what was passed and return an error.
 				return nil, errors.New("stop after target resolution")
 			}
 			t.Cleanup(func() { remoteGetFunc = originalGet })
@@ -569,20 +567,10 @@ func TestMirrorPopulatesRegistryMetadataFromSource(t *testing.T) {
 				logMessages = append(logMessages, prefix+args)
 			}, funcr.Options{Verbosity: 10})
 
-			p := &pusher{
-				target:         fakeTarget{prefix: "$registry/$namespace"},
-				transform:      util.CleanRepoName,
-				logger:         logger,
-				keychain:       NewStaticKeychain(nil),
-				pushed:         make(map[string]struct{}),
-				failed:         make(map[string]time.Time),
-				requestTimeout: 0,
-			}
+			p := NewPusher(fakeTarget{prefix: "$registry/$namespace"}, false, false, nil, logger, nil, 0, 0, false, true, nil, nil)
 
 			_ = p.Mirror(context.Background(), tc.source, Metadata{Namespace: "default"})
 
-			// The target reference is logged and stored in the pushed map key.
-			// Verify via the pushed map: beginProcessing records the target string.
 			logMu.Lock()
 			defer logMu.Unlock()
 			found := false
