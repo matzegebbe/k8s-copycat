@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.19.0...v0.20.0) (2026-04-02)
+
+
+### Features
+
+* **deps:** bump the go-patch group with 5 updates ([#206](https://github.com/matzegebbe/k8s-copycat/issues/206)) ([3b451d0](https://github.com/matzegebbe/k8s-copycat/commit/3b451d022064321448eee2be28e8d2b9fe4aa9a1))
+* **mirror:** add $registry placeholder for repoPrefix templating ([#208](https://github.com/matzegebbe/k8s-copycat/issues/208)) ([1486b67](https://github.com/matzegebbe/k8s-copycat/commit/1486b6760d4ccd75895dd86fcec3a1bd07888bb6))
+
 ## [0.19.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.18.1...v0.19.0) (2026-03-20)
 
 
