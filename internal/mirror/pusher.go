@@ -52,6 +52,7 @@ type Metadata struct {
 	Architecture  string
 	OS            string
 	ImageID       string
+	Registry      string
 }
 
 type platformSpec struct {
@@ -346,6 +347,16 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	srcRef, err := name.ParseReference(src, name.WeakValidation)
 	if err != nil {
 		return fmt.Errorf("parse source: %w", err)
+	}
+
+	// Populate source registry in metadata for repoPrefix templating.
+	if meta.Registry == "" {
+		reg := srcRef.Context().RegistryStr()
+		// Normalize Docker Hub registry to docker.io.
+		if reg == name.DefaultRegistry {
+			reg = "docker.io"
+		}
+		meta.Registry = reg
 	}
 
 	// Build target repo path
@@ -1459,6 +1470,7 @@ func expandRepoPrefix(prefix string, meta Metadata) string {
 		"$podname", meta.PodName,
 		"$container_name", meta.ContainerName,
 		"$arch", meta.Architecture,
+		"$registry", meta.Registry,
 	)
 	expanded := replacer.Replace(prefix)
 	expanded = strings.TrimSpace(expanded)

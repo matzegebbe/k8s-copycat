@@ -174,6 +174,7 @@ When a `repoPrefix` is configured (via config file or environment variables), th
 - `$podname` — Name of the owning resource (or Pod when available).
 - `$container_name` — Container name that uses the image.
 - `$arch` — Architecture of the mirrored image. When `digestPull` is enabled this is the architecture of the selected manifest (for example `amd64`). When mirroring a manifest list, the placeholder expands to a hyphen-separated list of all mirrored architectures (for example `386-amd64-arm64-ppc64le-riscv64-s390x`). If copycat cannot determine the architecture it leaves the segment blank.
+- `$registry` — Source registry of the image (for example `ghcr.io` or `quay.io`). Images from Docker Hub (including short names like `nginx`) are normalised to `docker.io`.
 
 For example, setting `repoPrefix: "$namespace/$podname"` keeps target repositories unique across namespaces even when multiple workloads reference the same source image. To separate images by architecture you can combine placeholders:
 

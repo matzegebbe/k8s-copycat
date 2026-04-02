@@ -188,6 +188,19 @@ func TestResolveRepoPathWithArchitectureMetadata(t *testing.T) {
 	}
 }
 
+func TestResolveRepoPathWithRegistryMetadata(t *testing.T) {
+	p := &pusher{
+		target:    fakeTarget{prefix: "$registry/$namespace"},
+		transform: util.CleanRepoName,
+	}
+
+	repo := p.resolveRepoPath("library/nginx", Metadata{Namespace: "prod", Registry: "ghcr.io"})
+	want := "ghcr.io/prod/library/nginx"
+	if repo != want {
+		t.Fatalf("expected %q, got %q", want, repo)
+	}
+}
+
 func TestDryPullOption(t *testing.T) {
 	p := NewPusher(fakeTarget{}, true, true, nil, testr.New(t), nil, 0, 0, false, true, nil, nil)
 
@@ -514,6 +527,78 @@ func TestMirrorSkipsExcludedRegistry(t *testing.T) {
 	}
 }
 
+func TestMirrorPopulatesRegistryMetadataFromSource(t *testing.T) {
+	cases := []struct {
+		name     string
+		source   string
+		wantRepo string
+	}{
+		{
+			name:     "docker hub image normalizes to docker.io",
+			source:   "docker.io/library/nginx:1.28",
+			wantRepo: "example.com/docker.io/default/library/nginx:1.28",
+		},
+		{
+			name:     "ghcr.io image preserves registry",
+			source:   "ghcr.io/org/app:v1",
+			wantRepo: "example.com/ghcr.io/default/org/app:v1",
+		},
+		{
+			name:     "quay.io image preserves registry",
+			source:   "quay.io/prometheus/node-exporter:latest",
+			wantRepo: "example.com/quay.io/default/prometheus/node-exporter:latest",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			originalGet := remoteGetFunc
+			remoteGetFunc = func(ref name.Reference, _ ...remote.Option) (*remote.Descriptor, error) {
+				// Capture is called with the source ref; we need the target.
+				// Instead, record what was passed and return an error.
+				return nil, errors.New("stop after target resolution")
+			}
+			t.Cleanup(func() { remoteGetFunc = originalGet })
+
+			// Use a custom logger to capture the target from log output.
+			var logMu sync.Mutex
+			var logMessages []string
+			logger := funcr.New(func(prefix, args string) {
+				logMu.Lock()
+				defer logMu.Unlock()
+				logMessages = append(logMessages, prefix+args)
+			}, funcr.Options{Verbosity: 10})
+
+			p := &pusher{
+				target:         fakeTarget{prefix: "$registry/$namespace"},
+				transform:      util.CleanRepoName,
+				logger:         logger,
+				keychain:       NewStaticKeychain(nil),
+				pushed:         make(map[string]struct{}),
+				failed:         make(map[string]time.Time),
+				requestTimeout: 0,
+			}
+
+			_ = p.Mirror(context.Background(), tc.source, Metadata{Namespace: "default"})
+
+			// The target reference is logged and stored in the pushed map key.
+			// Verify via the pushed map: beginProcessing records the target string.
+			logMu.Lock()
+			defer logMu.Unlock()
+			found := false
+			for _, msg := range logMessages {
+				if strings.Contains(msg, tc.wantRepo) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Fatalf("expected target %q in log output, got messages: %v", tc.wantRepo, logMessages)
+			}
+		})
+	}
+}
+
 func TestMirrorSkipsWithoutPodDigestWhenDigestPullEnabled(t *testing.T) {
 	p := &pusher{
 		target:         fakeTarget{prefix: "$namespace"},
@@ -626,6 +711,30 @@ func TestExpandRepoPrefixSkipsEmptySegments(t *testing.T) {
 			pref: "$arch/$namespace",
 			meta: Metadata{Namespace: "default", Architecture: "amd64"},
 			want: "amd64/default",
+		},
+		{
+			name: "registry placeholder with ghcr",
+			pref: "$registry/$namespace",
+			meta: Metadata{Namespace: "prod", Registry: "ghcr.io"},
+			want: "ghcr.io/prod",
+		},
+		{
+			name: "registry placeholder with docker.io",
+			pref: "$registry/$namespace",
+			meta: Metadata{Namespace: "prod", Registry: "docker.io"},
+			want: "docker.io/prod",
+		},
+		{
+			name: "registry placeholder omitted when empty",
+			pref: "$registry/$namespace",
+			meta: Metadata{Namespace: "prod"},
+			want: "prod",
+		},
+		{
+			name: "all placeholders including registry",
+			pref: "$registry/$namespace/$arch",
+			meta: Metadata{Namespace: "team-a", Architecture: "arm64", Registry: "quay.io"},
+			want: "quay.io/team-a/arm64",
 		},
 	}
 
