@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.21.0...v0.22.0) (2026-04-08)
+
+
+### Features
+
+* **mirror:** normalize Docker Hub refs in registry exclusion matching ([#212](https://github.com/matzegebbe/k8s-copycat/issues/212)) ([febec28](https://github.com/matzegebbe/k8s-copycat/commit/febec28d1f22034769c21b772f45fcf45c8126f2))
+
 ## [0.21.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.20.0...v0.21.0) (2026-04-07)
 
 
