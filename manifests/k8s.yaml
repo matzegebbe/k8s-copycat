@@ -157,7 +157,7 @@ data:
     # - amd64                           # shorthand for linux/amd64 also works
     # - linux/arm64
     # allowDifferentDigestRepush: false # optional: fail when the target tag already exists with a different digest (except for "latest")
-    # excludeRegistries: ["123456789.dkr.ecr.eu-central-1.amazonaws.com", "registry.gitlab.com", "internal.registry/team"]
+    # excludeRegistries: ["123456789.dkr.ecr.eu-central-1.amazonaws.com", "registry.gitlab.com", "internal.registry/team", "docker.io"]
     # watchResources:
     #   - deployments                   # default: listen to all supported resource types
     #   - statefulsets
