@@ -1517,7 +1517,12 @@ func normalizeRegistryPrefix(val string) string {
 	trimmed = strings.ToLower(trimmed)
 	trimmed = strings.TrimPrefix(trimmed, "https://")
 	trimmed = strings.TrimPrefix(trimmed, "http://")
-	return strings.TrimSuffix(trimmed, "/")
+	trimmed = strings.TrimSuffix(trimmed, "/")
+	// Normalize Docker Hub aliases to docker.io.
+	if trimmed == "index.docker.io" || strings.HasPrefix(trimmed, "index.docker.io/") {
+		trimmed = "docker.io" + trimmed[len("index.docker.io"):]
+	}
+	return trimmed
 }
 
 func normalizeImageReference(val string) string {
@@ -1527,7 +1532,28 @@ func normalizeImageReference(val string) string {
 	}
 	trimmed = strings.ToLower(trimmed)
 	trimmed = strings.TrimPrefix(trimmed, "https://")
-	return strings.TrimPrefix(trimmed, "http://")
+	trimmed = strings.TrimPrefix(trimmed, "http://")
+	// Normalize Docker Hub aliases to docker.io/.
+	if strings.HasPrefix(trimmed, "index.docker.io/") {
+		trimmed = "docker.io/" + trimmed[len("index.docker.io/"):]
+	}
+	// Bare image references (no registry prefix) are Docker Hub images.
+	// Detect by checking whether the first path component contains a dot or colon.
+	if firstSlash := strings.IndexByte(trimmed, '/'); firstSlash == -1 {
+		// Single-name image like "nginx:latest" → "docker.io/library/nginx:latest"
+		name := trimmed
+		if idx := strings.IndexAny(name, ":@"); idx != -1 {
+			name = name[:idx]
+		}
+		trimmed = "docker.io/library/" + trimmed
+	} else {
+		firstComponent := trimmed[:firstSlash]
+		if !strings.ContainsAny(firstComponent, ".:") {
+			// e.g. "library/nginx" or "myuser/nginx" → "docker.io/..."
+			trimmed = "docker.io/" + trimmed
+		}
+	}
+	return trimmed
 }
 
 func hasBoundaryPrefix(s, prefix string) bool {

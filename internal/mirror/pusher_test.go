@@ -225,6 +225,20 @@ func TestNewPusherConfiguresExcludedRegistries(t *testing.T) {
 	}
 }
 
+func TestNewPusherNormalizesIndexDockerIO(t *testing.T) {
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, true, []string{"index.docker.io"}, nil)
+
+	impl, ok := p.(*pusher)
+	if !ok {
+		t.Fatalf("expected *pusher, got %T", p)
+	}
+
+	want := []string{"docker.io"}
+	if !reflect.DeepEqual(impl.excludedRegistries, want) {
+		t.Fatalf("expected index.docker.io normalized to docker.io, got %#v", impl.excludedRegistries)
+	}
+}
+
 func TestMirrorRecordsPullErrorMetric(t *testing.T) {
 	metrics.Reset()
 	t.Cleanup(metrics.Reset)
@@ -506,6 +520,38 @@ func TestMatchExcludedRegistry(t *testing.T) {
 	}
 	if _, ok := p.matchExcludedRegistry("docker.io/library/nginx:latest"); ok {
 		t.Fatalf("expected unrelated image not to match")
+	}
+}
+
+func TestMatchExcludedRegistryDockerHub(t *testing.T) {
+	p := &pusher{excludedRegistries: []string{"docker.io"}}
+
+	// Explicit docker.io prefix
+	if prefix, ok := p.matchExcludedRegistry("docker.io/library/nginx:latest"); !ok || prefix != "docker.io" {
+		t.Fatalf("expected docker.io match for explicit prefix, got prefix=%q ok=%v", prefix, ok)
+	}
+	// Bare image (no registry, no user) → Docker Hub
+	if prefix, ok := p.matchExcludedRegistry("nginx:latest"); !ok || prefix != "docker.io" {
+		t.Fatalf("expected docker.io match for bare image, got prefix=%q ok=%v", prefix, ok)
+	}
+	// Bare image without tag
+	if prefix, ok := p.matchExcludedRegistry("nginx"); !ok || prefix != "docker.io" {
+		t.Fatalf("expected docker.io match for bare image without tag, got prefix=%q ok=%v", prefix, ok)
+	}
+	// User-scoped Docker Hub image (no explicit registry)
+	if prefix, ok := p.matchExcludedRegistry("myuser/nginx:latest"); !ok || prefix != "docker.io" {
+		t.Fatalf("expected docker.io match for user-scoped image, got prefix=%q ok=%v", prefix, ok)
+	}
+	// index.docker.io alias
+	if prefix, ok := p.matchExcludedRegistry("index.docker.io/library/nginx:latest"); !ok || prefix != "docker.io" {
+		t.Fatalf("expected docker.io match for index.docker.io alias, got prefix=%q ok=%v", prefix, ok)
+	}
+	// Non-Docker-Hub registry should not match
+	if _, ok := p.matchExcludedRegistry("gcr.io/project/image:latest"); ok {
+		t.Fatalf("expected gcr.io image not to match docker.io exclusion")
+	}
+	if _, ok := p.matchExcludedRegistry("ghcr.io/org/app:v1"); ok {
+		t.Fatalf("expected ghcr.io image not to match docker.io exclusion")
 	}
 }
 

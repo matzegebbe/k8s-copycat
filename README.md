@@ -127,7 +127,7 @@ Copycat is configured through a combination of environment variables and a YAML 
 
 **Registry routing**
 
-- `EXCLUDE_REGISTRIES`: registry prefixes that should never be mirrored. Include the target registry (for example `123456789.dkr.ecr.eu-central-1.amazonaws.com`) to avoid loops.
+- `EXCLUDE_REGISTRIES`: registry prefixes that should never be mirrored. Include the target registry (for example `123456789.dkr.ecr.eu-central-1.amazonaws.com`) to avoid loops. Use `docker.io` to exclude all Docker Hub images — this covers bare images like `nginx`, user-scoped images like `myuser/nginx`, and explicit references like `docker.io/library/nginx`.
 - `TARGET_REPO_PREFIX` or config `repoPrefix`: prepend names before pushing to the destination.
 - Optional `pathMap` entries in the config file rewrite repository paths before pushing.
 
