@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.23.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.22.0...v0.23.0) (2026-04-09)
+
+
+### Features
+
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#214](https://github.com/matzegebbe/k8s-copycat/issues/214)) ([f126fd1](https://github.com/matzegebbe/k8s-copycat/commit/f126fd10c9113c1e839d01049136e9f02fb5194e))
+
+
+### Bug Fixes
+
+* **mirror:** demote image-present logs to debug level ([#216](https://github.com/matzegebbe/k8s-copycat/issues/216)) ([39c1263](https://github.com/matzegebbe/k8s-copycat/commit/39c1263ff6ef990a862ad59b9faaaa91d0b0f4b1))
+
 ## [0.22.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.21.0...v0.22.0) (2026-04-08)
 
 
