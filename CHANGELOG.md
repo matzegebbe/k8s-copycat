@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.24.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.23.0...v0.24.0) (2026-04-17)
+
+
+### Features
+
+* **deps:** bump github.com/aws/aws-sdk-go-v2/config ([#220](https://github.com/matzegebbe/k8s-copycat/issues/220)) ([d280643](https://github.com/matzegebbe/k8s-copycat/commit/d280643edaba7067710960adc85c58b645714ef3))
+* **deps:** bump github.com/google/go-containerregistry ([#217](https://github.com/matzegebbe/k8s-copycat/issues/217)) ([8fd9ef7](https://github.com/matzegebbe/k8s-copycat/commit/8fd9ef71eba8ab68c09c9d69cd7339c7c2723cd5))
+* **deps:** bump the go-patch group with 3 updates ([#219](https://github.com/matzegebbe/k8s-copycat/issues/219)) ([2ea2a4d](https://github.com/matzegebbe/k8s-copycat/commit/2ea2a4dfafb3a7fdd780ebbae161984cbf65ce77))
+
 ## [0.23.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.22.0...v0.23.0) (2026-04-09)
 
 
