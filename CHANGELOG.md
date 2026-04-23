@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.25.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.24.0...v0.25.0) (2026-04-23)
+
+
+### Features
+
+* **deps:** bump googleapis/release-please-action from 4 to 5 ([#223](https://github.com/matzegebbe/k8s-copycat/issues/223)) ([e55d85d](https://github.com/matzegebbe/k8s-copycat/commit/e55d85dee3c620d9f43420134fbd4aa7a24cf742))
+* **deps:** bump k8s.io/api from 0.35.4 to 0.36.0 ([#225](https://github.com/matzegebbe/k8s-copycat/issues/225)) ([f40b925](https://github.com/matzegebbe/k8s-copycat/commit/f40b925b4a5de8fc56e5867d9f9341f129694c80))
+* **deps:** bump k8s.io/apimachinery from 0.35.4 to 0.36.0 ([#224](https://github.com/matzegebbe/k8s-copycat/issues/224)) ([fbb93a7](https://github.com/matzegebbe/k8s-copycat/commit/fbb93a71d1415a0e46a34b8173059cb2833246b1))
+* **deps:** bump k8s.io/client-go from 0.35.4 to 0.36.0 ([#226](https://github.com/matzegebbe/k8s-copycat/issues/226)) ([4c8ccee](https://github.com/matzegebbe/k8s-copycat/commit/4c8ccee929ea46b559093df65ceaa275e2544be0))
+* **deps:** bump the go-patch group with 5 updates ([#221](https://github.com/matzegebbe/k8s-copycat/issues/221)) ([320ead0](https://github.com/matzegebbe/k8s-copycat/commit/320ead036f579f8ca7a42a5d02c6423d86eaab23))
+
 ## [0.24.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.23.0...v0.24.0) (2026-04-17)
 
 
