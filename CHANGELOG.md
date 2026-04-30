@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.26.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.25.0...v0.26.0) (2026-04-30)
+
+
+### Features
+
+* **deps:** bump go.uber.org/zap from 1.27.1 to 1.28.0 ([#234](https://github.com/matzegebbe/k8s-copycat/issues/234)) ([cfcb369](https://github.com/matzegebbe/k8s-copycat/commit/cfcb369d5f9ef729a65d5b29eea82dcc97a9dca6))
+* **deps:** bump k8s.io/apimachinery from 0.35.0 to 0.36.0 ([#231](https://github.com/matzegebbe/k8s-copycat/issues/231)) ([3bccebf](https://github.com/matzegebbe/k8s-copycat/commit/3bccebf4190e7b13cd7dd6407892e0b3589407df))
+* **deps:** bump k8s.io/apimachinery from 0.35.0 to 0.36.0 ([#235](https://github.com/matzegebbe/k8s-copycat/issues/235)) ([f8956c8](https://github.com/matzegebbe/k8s-copycat/commit/f8956c8c9a862b4acf08988512d4321336eb1046))
+* **deps:** bump k8s.io/client-go from 0.35.0 to 0.36.0 ([#229](https://github.com/matzegebbe/k8s-copycat/issues/229)) ([f0c55f6](https://github.com/matzegebbe/k8s-copycat/commit/f0c55f6e65d4034966db44f57918a0e2ede62c65))
+* **deps:** bump the go-patch group with 5 updates ([#237](https://github.com/matzegebbe/k8s-copycat/issues/237)) ([8cad3d5](https://github.com/matzegebbe/k8s-copycat/commit/8cad3d566862c4c82e0d5e93d68ddf806fc26d87))
+* **images:** cover digest-pull ignored tags and manifest overwrite hint ([#238](https://github.com/matzegebbe/k8s-copycat/issues/238)) ([1ac5e9b](https://github.com/matzegebbe/k8s-copycat/commit/1ac5e9b440256d41e47b658c28e8fa3d6f1f04a2))
+
 ## [0.25.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.24.0...v0.25.0) (2026-04-23)
 
 
