@@ -42,6 +42,7 @@ type runtimeConfig struct {
 	Keychain                   authn.Keychain
 	FailureCooldown            time.Duration
 	DigestPull                 bool
+	DigestPullIgnoredTags      []string
 	CheckNodePlatform          bool
 	MirrorPlatforms            []string
 	AllowDifferentDigestRepush bool
@@ -221,6 +222,10 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		}
 		digestPull = parsed
 	}
+	digestPullIgnoredTags := resolveList(os.Getenv("DIGEST_PULL_IGNORED_TAGS"), fileCfg.DigestPullIgnoredTags)
+	if len(digestPullIgnoredTags) == 0 {
+		digestPullIgnoredTags = []string{"latest"}
+	}
 
 	checkNodePlatform := fileCfg.CheckNodePlatform
 	if v := strings.TrimSpace(os.Getenv("CHECK_NODE_PLATFORM")); v != "" {
@@ -288,6 +293,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		Keychain:                   keychain,
 		FailureCooldown:            failureCooldown,
 		DigestPull:                 digestPull,
+		DigestPullIgnoredTags:      digestPullIgnoredTags,
 		CheckNodePlatform:          checkNodePlatform,
 		MirrorPlatforms:            mirrorPlatforms,
 		AllowDifferentDigestRepush: allowDifferentDigestRepush,

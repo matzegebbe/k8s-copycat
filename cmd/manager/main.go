@@ -153,6 +153,7 @@ func main() {
 		cfg.RequestTimeout,
 		cfg.FailureCooldown,
 		cfg.DigestPull,
+		cfg.DigestPullIgnoredTags,
 		cfg.AllowDifferentDigestRepush,
 		cfg.ExcludedRegistries,
 		cfg.MirrorPlatforms,

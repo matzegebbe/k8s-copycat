@@ -215,6 +215,7 @@ type pusher struct {
 	dryPull                    bool
 	transform                  func(string) string
 	pullByDigest               bool
+	digestPullIgnoredTags      map[string]struct{}
 	allowDifferentDigestRepush bool
 	mirrorPlatforms            []platformSpec
 	mirrorPlatformSet          map[string]struct{}
@@ -254,7 +255,7 @@ func (e *RetryError) Unwrap() error {
 	return e.Cause
 }
 
-func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, allowDifferentDigestRepush bool, excluded []string, mirrorPlatforms []string) Pusher {
+func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, digestPullIgnoredTags []string, allowDifferentDigestRepush bool, excluded []string, mirrorPlatforms []string) Pusher {
 	if transform == nil {
 		transform = util.CleanRepoName
 	}
@@ -285,6 +286,7 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 		dryPull:                    dryPull,
 		transform:                  transform,
 		pullByDigest:               pullByDigest,
+		digestPullIgnoredTags:      normalizeTagSet(digestPullIgnoredTags),
 		allowDifferentDigestRepush: allowDifferentDigestRepush,
 		mirrorPlatforms:            parsedPlatforms,
 		mirrorPlatformSet:          platformSet,
@@ -299,6 +301,18 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 		now:                        time.Now,
 		excludedRegistries:         normalizedExclusions,
 	}
+}
+
+func normalizeTagSet(tags []string) map[string]struct{} {
+	out := make(map[string]struct{}, len(tags))
+	for _, tag := range tags {
+		trimmed := strings.ToLower(strings.TrimSpace(tag))
+		if trimmed == "" {
+			continue
+		}
+		out[trimmed] = struct{}{}
+	}
+	return out
 }
 
 func newTransport(insecure bool) http.RoundTripper {
@@ -413,14 +427,24 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	}
 
 	normalizedID := normalizeImageID(meta.ImageID)
-	pullRef, podDigestStr, havePodDigest, pullRefErr := pullReferenceFromMetadata(p.pullByDigest, normalizedID, srcRef)
+	usePodDigest := p.pullByDigest
+	if p.pullByDigest {
+		if srcTag, ok := srcRef.(name.Tag); ok {
+			if _, ignored := p.digestPullIgnoredTags[strings.ToLower(strings.TrimSpace(srcTag.TagStr()))]; ignored {
+				usePodDigest = false
+				log.V(1).Info("digest pull ignored for tag configured in digestPullIgnoredTags", "tag", srcTag.TagStr())
+			}
+		}
+	}
+
+	pullRef, podDigestStr, havePodDigest, pullRefErr := pullReferenceFromMetadata(usePodDigest, normalizedID, srcRef)
 	if pullRefErr != nil {
 		log.V(1).Error(pullRefErr, "failed to parse digest from pod imageID", "imageID", normalizedID)
 	} else if havePodDigest {
 		log.V(1).Info("using pod imageID digest for pull", "imageID", normalizedID)
 	}
 
-	if p.pullByDigest && !havePodDigest && !sourceIsDigest {
+	if usePodDigest && !havePodDigest && !sourceIsDigest {
 		procLog.V(1).Info(
 			"digest pull enabled but pod imageID digest is not available yet, skipping until it is reported",
 			"result", "skipped",
@@ -465,7 +489,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		requestPlatform = nil
 	}
 
-	if p.pullByDigest && havePodDigest {
+	if usePodDigest && havePodDigest {
 		var digestRef name.Reference
 		if existingDigest, ok := targetRef.(name.Digest); ok && strings.EqualFold(existingDigest.DigestStr(), podDigestStr) {
 			digestRef = existingDigest
@@ -518,7 +542,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		descCancel context.CancelFunc
 	)
 
-	if p.pullByDigest && !havePodDigest && len(p.mirrorPlatforms) == 0 {
+	if usePodDigest && !havePodDigest && len(p.mirrorPlatforms) == 0 {
 		headCtx, cancelHead := p.operationContext(ctx)
 		targetHead, headErr := remoteHeadFunc(
 			targetRef,
@@ -578,6 +602,9 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	if err != nil {
 		logRegistryAuthError(log, err, "pull descriptor")
 		metrics.RecordPullError(src)
+		if usePodDigest && havePodDigest && strings.Contains(err.Error(), "MANIFEST_UNKNOWN") {
+			return p.failureResult(target, fmt.Errorf("describe %s: %w (looks like the original image was overwritten and pod imageID digest is no longer available at source)", src, err))
+		}
 		return p.failureResult(target, fmt.Errorf("describe %s: %w", src, err))
 	}
 	defer descCancel()
