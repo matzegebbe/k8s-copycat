@@ -134,6 +134,7 @@ Copycat is configured through a combination of environment variables and a YAML 
 **Mirroring behavior**
 
 - `DIGEST_PULL`: resolve tags to digests before pulling (`false` by default).
+- `DIGEST_PULL_IGNORED_TAGS`: comma-separated tags that should stay tag-based even when digest pull is enabled (`latest` by default).
 - `CHECK_NODE_PLATFORM`: consult node architecture/OS before mirroring multi-arch images (`false` by default, requires `get` on `nodes`).
 - `ALLOW_DIFFERENT_DIGEST_REPUSH`: permit overwriting tags with different digests (`true` by default, `latest` is always protected).
 - `DRY_RUN`: perform all operations except pushing to the target registry (`false` by default).
@@ -234,6 +235,8 @@ ecr:
       ]
     }
 digestPull: true                  # resolve source tags to their immutable digest before pulling
+digestPullIgnoredTags:            # optional: keep these tags tag-based even when digestPull is enabled
+  - latest
 checkNodePlatform: true           # optional: ask the API for node architecture/OS before mirroring Pod images
 mirrorPlatforms:                  # optional: always mirror these additional platforms when digestPull is enabled
   - amd64                         # shorthand for linux/amd64 also works
