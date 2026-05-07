@@ -154,6 +154,7 @@ func main() {
 		cfg.FailureCooldown,
 		cfg.DigestPull,
 		cfg.DigestPullIgnoredTags,
+		cfg.IgnoreMissingPlatforms,
 		cfg.AllowDifferentDigestRepush,
 		cfg.ExcludedRegistries,
 		cfg.MirrorPlatforms,

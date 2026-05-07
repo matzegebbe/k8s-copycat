@@ -235,8 +235,10 @@ ecr:
       ]
     }
 digestPull: true                  # resolve source tags to their immutable digest before pulling
-digestPullIgnoredTags:            # optional: keep these tags tag-based even when digestPull is enabled
+digestPullIgnoredTags:            # optional: keep these tags tag-based even when digestPull is enabled (default: ["latest"])
   - latest
+ignoreMissingPlatforms:           # optional: regex list for source|platform to suppress "does not offer platform" logs
+  - '^registry\\.gitlab\\.com/.+\\|linux/arm64$'
 checkNodePlatform: true           # optional: ask the API for node architecture/OS before mirroring Pod images
 mirrorPlatforms:                  # optional: always mirror these additional platforms when digestPull is enabled
   - amd64                         # shorthand for linux/amd64 also works

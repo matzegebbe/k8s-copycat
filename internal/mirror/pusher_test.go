@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -202,7 +203,7 @@ func TestResolveRepoPathWithRegistryMetadata(t *testing.T) {
 }
 
 func TestDryPullOption(t *testing.T) {
-	p := NewPusher(fakeTarget{}, true, true, nil, testr.New(t), nil, 0, 0, false, nil, true, nil, nil)
+	p := NewPusher(fakeTarget{}, true, true, nil, testr.New(t), nil, 0, 0, false, nil, nil, true, nil, nil)
 
 	if !p.DryPull() {
 		t.Fatalf("expected dry pull to be enabled")
@@ -210,7 +211,7 @@ func TestDryPullOption(t *testing.T) {
 }
 
 func TestNewPusherConfiguresExcludedRegistries(t *testing.T) {
-	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, true, []string{"registry.gitlab.com/team/"}, nil)
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, nil, true, []string{"registry.gitlab.com/team/"}, nil)
 
 	impl, ok := p.(*pusher)
 	if !ok {
@@ -226,7 +227,7 @@ func TestNewPusherConfiguresExcludedRegistries(t *testing.T) {
 }
 
 func TestNewPusherNormalizesIndexDockerIO(t *testing.T) {
-	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, true, []string{"index.docker.io"}, nil)
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, nil, true, []string{"index.docker.io"}, nil)
 
 	impl, ok := p.(*pusher)
 	if !ok {
@@ -249,7 +250,7 @@ func TestMirrorRecordsPullErrorMetric(t *testing.T) {
 	}
 	t.Cleanup(func() { remoteGetFunc = original })
 
-	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, true, nil, nil)
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, nil, true, nil, nil)
 	ctx := context.Background()
 
 	err := p.Mirror(ctx, "docker.io/library/nginx:latest", Metadata{})
@@ -296,7 +297,7 @@ func TestMirrorSkipsSourcePullWhenTargetDigestMatches(t *testing.T) {
 	}
 	t.Cleanup(func() { remoteGetFunc = originalGet })
 
-	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, nil, true, nil, nil)
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, nil, nil, true, nil, nil)
 	impl, ok := p.(*pusher)
 	if !ok {
 		t.Fatalf("expected *pusher, got %T", p)
@@ -340,7 +341,7 @@ func TestMirrorRechecksTargetAfterSuccessfulSkip(t *testing.T) {
 	}
 	t.Cleanup(func() { remoteGetFunc = originalGet })
 
-	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, nil, true, nil, nil)
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, nil, nil, true, nil, nil)
 	source := "docker.io/library/nginx@sha256:" + strings.Repeat("b", 64)
 
 	if err := p.Mirror(context.Background(), source, Metadata{}); err != nil {
@@ -388,7 +389,7 @@ func TestMirrorContinuesPullWhenTargetDigestUnknown(t *testing.T) {
 	}
 	t.Cleanup(func() { remoteGetFunc = originalGet })
 
-	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, nil, true, nil, nil)
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, nil, nil, true, nil, nil)
 
 	source := "docker.io/library/nginx@sha256:" + strings.Repeat("a", 64)
 
@@ -413,7 +414,7 @@ func TestMirrorRecordsPushErrorMetric(t *testing.T) {
 	metrics.Reset()
 	t.Cleanup(metrics.Reset)
 
-	p := NewPusher(authErrorTarget{fakeTarget: fakeTarget{}, err: errors.New("auth failed")}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, true, nil, nil)
+	p := NewPusher(authErrorTarget{fakeTarget: fakeTarget{}, err: errors.New("auth failed")}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, nil, true, nil, nil)
 	ctx := context.Background()
 
 	err := p.Mirror(ctx, "docker.io/library/nginx:1.25", Metadata{})
@@ -443,7 +444,7 @@ func TestMirrorDigestPullIgnoredTagSkipsPodImageIDDigest(t *testing.T) {
 	}
 	t.Cleanup(func() { remoteHeadFunc = originalHead })
 
-	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, []string{"latest"}, true, nil, nil)
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, []string{"latest"}, nil, true, nil, nil)
 	err := p.Mirror(context.Background(), "docker.io/library/nginx:latest", Metadata{
 		ImageID: "docker.io/library/nginx@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	})
@@ -465,7 +466,7 @@ func TestMirrorManifestUnknownIncludesOverwriteHint(t *testing.T) {
 	}
 	t.Cleanup(func() { remoteHeadFunc = originalHead })
 
-	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, nil, true, nil, nil)
+	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, nil, nil, true, nil, nil)
 	err := p.Mirror(context.Background(), "docker.io/library/nginx:1.25", Metadata{
 		ImageID: "docker.io/library/nginx@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 	})
@@ -478,7 +479,7 @@ func TestMirrorManifestUnknownIncludesOverwriteHint(t *testing.T) {
 }
 
 func TestNewPusherSeparatesSourceAndTargetTransportSecurity(t *testing.T) {
-	p := NewPusher(fakeTarget{insecure: true}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, true, nil, nil)
+	p := NewPusher(fakeTarget{insecure: true}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, nil, true, nil, nil)
 
 	impl, ok := p.(*pusher)
 	if !ok {
@@ -663,7 +664,7 @@ func TestMirrorPopulatesRegistryMetadataFromSource(t *testing.T) {
 				logMessages = append(logMessages, prefix+args)
 			}, funcr.Options{Verbosity: 10})
 
-			p := NewPusher(fakeTarget{prefix: "$registry/$namespace"}, false, false, nil, logger, nil, 0, 0, false, nil, true, nil, nil)
+			p := NewPusher(fakeTarget{prefix: "$registry/$namespace"}, false, false, nil, logger, nil, 0, 0, false, nil, nil, true, nil, nil)
 
 			_ = p.Mirror(context.Background(), tc.source, Metadata{Namespace: "default"})
 
@@ -1124,5 +1125,15 @@ func TestDetectRegistryAuthErrorByDiagnostic(t *testing.T) {
 	want := "UNAUTHORIZED: authentication required"
 	if info.diagnostics[0] != want {
 		t.Fatalf("unexpected diagnostic: %q", info.diagnostics[0])
+	}
+}
+
+func TestIgnoreMissingPlatformLog(t *testing.T) {
+	patterns := []*regexp.Regexp{regexp.MustCompile(`^registry\.gitlab\.com/.+\|linux/arm64$`)}
+	if !ignoreMissingPlatformLog("registry.gitlab.com/org/app:1.0.0", "linux/arm64", patterns) {
+		t.Fatalf("expected ignore match")
+	}
+	if ignoreMissingPlatformLog("registry.gitlab.com/org/app:1.0.0", "linux/amd64", patterns) {
+		t.Fatalf("did not expect ignore match for different platform")
 	}
 }
