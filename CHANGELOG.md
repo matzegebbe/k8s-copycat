@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.1](https://github.com/matzegebbe/k8s-copycat/compare/v0.27.0...v0.27.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* **mirror:** suppress aggregate missing-platform logs when patterns match ([#241](https://github.com/matzegebbe/k8s-copycat/issues/241)) ([894ddde](https://github.com/matzegebbe/k8s-copycat/commit/894ddde3ac6904813d782086588ad8155e2a3965))
+
 ## [0.27.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.26.0...v0.27.0) (2026-05-01)
 
 
