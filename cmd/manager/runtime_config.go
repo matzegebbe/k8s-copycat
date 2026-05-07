@@ -43,6 +43,7 @@ type runtimeConfig struct {
 	FailureCooldown            time.Duration
 	DigestPull                 bool
 	DigestPullIgnoredTags      []string
+	IgnoreMissingPlatforms     []string
 	CheckNodePlatform          bool
 	MirrorPlatforms            []string
 	AllowDifferentDigestRepush bool
@@ -226,6 +227,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 	if len(digestPullIgnoredTags) == 0 {
 		digestPullIgnoredTags = []string{"latest"}
 	}
+	ignoreMissingPlatforms := resolveList(os.Getenv("IGNORE_MISSING_PLATFORMS"), fileCfg.IgnoreMissingPlatforms)
 
 	checkNodePlatform := fileCfg.CheckNodePlatform
 	if v := strings.TrimSpace(os.Getenv("CHECK_NODE_PLATFORM")); v != "" {
@@ -294,6 +296,7 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		FailureCooldown:            failureCooldown,
 		DigestPull:                 digestPull,
 		DigestPullIgnoredTags:      digestPullIgnoredTags,
+		IgnoreMissingPlatforms:     ignoreMissingPlatforms,
 		CheckNodePlatform:          checkNodePlatform,
 		MirrorPlatforms:            mirrorPlatforms,
 		AllowDifferentDigestRepush: allowDifferentDigestRepush,

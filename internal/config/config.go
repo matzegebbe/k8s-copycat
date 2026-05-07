@@ -49,6 +49,7 @@ type Config struct {
 	Docker                     Docker               `yaml:"docker"`
 	DigestPull                 bool                 `yaml:"digestPull"`
 	DigestPullIgnoredTags      []string             `yaml:"digestPullIgnoredTags"`
+	IgnoreMissingPlatforms     []string             `yaml:"ignoreMissingPlatforms"`
 	CheckNodePlatform          bool                 `yaml:"checkNodePlatform"`
 	MirrorPlatforms            []string             `yaml:"mirrorPlatforms"`
 	AllowDifferentDigestRepush *bool                `yaml:"allowDifferentDigestRepush"`

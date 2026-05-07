@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -216,6 +217,7 @@ type pusher struct {
 	transform                  func(string) string
 	pullByDigest               bool
 	digestPullIgnoredTags      map[string]struct{}
+	ignoreMissingPlatforms     []*regexp.Regexp
 	allowDifferentDigestRepush bool
 	mirrorPlatforms            []platformSpec
 	mirrorPlatformSet          map[string]struct{}
@@ -255,7 +257,7 @@ func (e *RetryError) Unwrap() error {
 	return e.Cause
 }
 
-func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, digestPullIgnoredTags []string, allowDifferentDigestRepush bool, excluded []string, mirrorPlatforms []string) Pusher {
+func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, digestPullIgnoredTags []string, ignoreMissingPlatforms []string, allowDifferentDigestRepush bool, excluded []string, mirrorPlatforms []string) Pusher {
 	if transform == nil {
 		transform = util.CleanRepoName
 	}
@@ -275,6 +277,7 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 	}
 	normalizedExclusions := normalizeExcludedRegistries(excluded)
 	parsedPlatforms, platformSet := parseMirrorPlatforms(logger, mirrorPlatforms)
+	ignoreMissingPlatformRegex := compileRegexList(logger, "ignoreMissingPlatforms", ignoreMissingPlatforms)
 	targetInsecure := false
 	if t != nil {
 		targetInsecure = t.Insecure()
@@ -287,6 +290,7 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 		transform:                  transform,
 		pullByDigest:               pullByDigest,
 		digestPullIgnoredTags:      normalizeTagSet(digestPullIgnoredTags),
+		ignoreMissingPlatforms:     ignoreMissingPlatformRegex,
 		allowDifferentDigestRepush: allowDifferentDigestRepush,
 		mirrorPlatforms:            parsedPlatforms,
 		mirrorPlatformSet:          platformSet,
@@ -311,6 +315,26 @@ func normalizeTagSet(tags []string) map[string]struct{} {
 			continue
 		}
 		out[trimmed] = struct{}{}
+	}
+	return out
+}
+
+func compileRegexList(logger logr.Logger, field string, patterns []string) []*regexp.Regexp {
+	if len(patterns) == 0 {
+		return nil
+	}
+	out := make([]*regexp.Regexp, 0, len(patterns))
+	for _, pattern := range patterns {
+		trimmed := strings.TrimSpace(pattern)
+		if trimmed == "" {
+			continue
+		}
+		compiled, err := regexp.Compile(trimmed)
+		if err != nil {
+			logger.Error(err, "invalid regex ignored", "field", field, "pattern", trimmed)
+			continue
+		}
+		out = append(out, compiled)
 	}
 	return out
 }
@@ -631,7 +655,7 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	)
 
 	if len(p.mirrorPlatforms) > 0 && len(desiredPlatforms) > 1 && !desc.MediaType.IsIndex() {
-		logUnavailablePlatforms(log, src, desiredPlatforms[1:])
+		logUnavailablePlatforms(log, src, desiredPlatforms[1:], p.ignoreMissingPlatforms)
 	}
 
 	switch {
@@ -656,10 +680,12 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 		} else {
 			idx = filtered
 			if len(missing) > 0 {
-				logUnavailablePlatforms(log, src, missing)
-				log.Info(
-					"some configured mirrorPlatforms missing from source index", "missingPlatforms", specsToStrings(missing),
-				)
+				loggedMissing := logUnavailablePlatforms(log, src, missing, p.ignoreMissingPlatforms)
+				if len(loggedMissing) > 0 {
+					log.Info(
+						"some configured mirrorPlatforms missing from source index", "missingPlatforms", specsToStrings(loggedMissing),
+					)
+				}
 			}
 			log.V(1).Info(
 				"mirroring configured subset of multi-architecture index",
@@ -1403,11 +1429,12 @@ func specsToStrings(specs []platformSpec) []string {
 	return out
 }
 
-func logUnavailablePlatforms(logger logr.Logger, src string, specs []platformSpec) {
+func logUnavailablePlatforms(logger logr.Logger, src string, specs []platformSpec, ignored []*regexp.Regexp) []platformSpec {
 	if len(specs) == 0 {
-		return
+		return nil
 	}
 	seen := make(map[string]struct{}, len(specs))
+	logged := make([]platformSpec, 0, len(specs))
 	for _, spec := range specs {
 		platform := spec.String()
 		if platform == "" {
@@ -1416,12 +1443,31 @@ func logUnavailablePlatforms(logger logr.Logger, src string, specs []platformSpe
 		if _, alreadyLogged := seen[platform]; alreadyLogged {
 			continue
 		}
+		if ignoreMissingPlatformLog(src, platform, ignored) {
+			seen[platform] = struct{}{}
+			continue
+		}
+		logged = append(logged, spec)
 		logger.Info(
 			fmt.Sprintf("image %s does not offer platform %s", src, platform),
 			"platform", platform,
 		)
 		seen[platform] = struct{}{}
 	}
+	return logged
+}
+
+func ignoreMissingPlatformLog(src, platform string, ignored []*regexp.Regexp) bool {
+	if len(ignored) == 0 {
+		return false
+	}
+	candidate := src + "|" + platform
+	for _, pattern := range ignored {
+		if pattern.MatchString(candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func shouldMirrorEntireIndex(mediaType types.MediaType, pullByDigest bool, platform *v1.Platform) bool {

@@ -152,10 +152,13 @@ data:
     dryPull: true                       # log source pulls without contacting upstream registries
     includeNamespaces: ["test"]
     # digestPull: true                  # resolve source tags to their immutable digest before pulling
+    # digestPullIgnoredTags: ["latest"] # optional: defaults to ["latest"] when omitted
     # checkNodePlatform: true           # optional: ask the API for node architecture/OS before mirroring Pod images
     # mirrorPlatforms:                  # optional: always mirror these additional platforms when digestPull is enabled
     # - amd64                           # shorthand for linux/amd64 also works
     # - linux/arm64
+    # ignoreMissingPlatforms:           # optional: regex list matching "<source>|<platform>" to suppress missing-platform info logs
+    # - '^registry\\.gitlab\\.com/.+\\|linux/arm64$'
     # allowDifferentDigestRepush: false # optional: fail when the target tag already exists with a different digest (except for "latest")
     # excludeRegistries: ["123456789.dkr.ecr.eu-central-1.amazonaws.com", "registry.gitlab.com", "internal.registry/team", "docker.io"]
     # watchResources:
