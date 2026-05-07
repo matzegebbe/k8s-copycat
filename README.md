@@ -2,11 +2,7 @@
 
 ![k8s-copycat logo](k8s-copycat-logo.png)
 
-> Continuously mirror the images your Kubernetes workloads already run into the registry you control.
-
-## ⚠️ Disclaimer
-
-This is an **absolutely experimental WIP project**. Do **not** use it in production environments.
+> Your cluster’s insurance policy: A non-invasive controller that preserves and replicates every container image your workloads need to a registry you control.
 
 ## Table of Contents
 
