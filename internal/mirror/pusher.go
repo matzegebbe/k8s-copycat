@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"regexp"
@@ -228,6 +229,7 @@ type pusher struct {
 	logger                     logr.Logger
 	keychain                   authn.Keychain
 	requestTimeout             time.Duration
+	registryRetry              RetryConfig
 	failureCooldown            time.Duration
 	failed                     map[string]time.Time
 	now                        func() time.Time
@@ -235,6 +237,13 @@ type pusher struct {
 }
 
 const DefaultFailureCooldown = time.Hour
+const DefaultRegistryRetryAttempts = 3
+const DefaultRegistryRetryBackoff = 10 * time.Second
+
+type RetryConfig struct {
+	Attempts int
+	Backoff  time.Duration
+}
 
 var ErrInCooldown = errors.New("mirror: target is in failure cooldown")
 
@@ -257,7 +266,7 @@ func (e *RetryError) Unwrap() error {
 	return e.Cause
 }
 
-func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, digestPullIgnoredTags []string, ignoreMissingPlatforms []string, allowDifferentDigestRepush bool, excluded []string, mirrorPlatforms []string) Pusher {
+func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(string) string, logger logr.Logger, keychain authn.Keychain, requestTimeout time.Duration, failureCooldown time.Duration, pullByDigest bool, digestPullIgnoredTags []string, ignoreMissingPlatforms []string, allowDifferentDigestRepush bool, excluded []string, mirrorPlatforms []string, retryConfig ...RetryConfig) Pusher {
 	if transform == nil {
 		transform = util.CleanRepoName
 	}
@@ -274,6 +283,16 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 	}
 	if failureCooldown < 0 {
 		failureCooldown = DefaultFailureCooldown
+	}
+	retry := RetryConfig{Attempts: DefaultRegistryRetryAttempts, Backoff: DefaultRegistryRetryBackoff}
+	if len(retryConfig) > 0 {
+		retry = retryConfig[0]
+	}
+	if retry.Attempts <= 0 {
+		retry.Attempts = 1
+	}
+	if retry.Backoff < 0 {
+		retry.Backoff = 0
 	}
 	normalizedExclusions := normalizeExcludedRegistries(excluded)
 	parsedPlatforms, platformSet := parseMirrorPlatforms(logger, mirrorPlatforms)
@@ -300,6 +319,7 @@ func NewPusher(t registry.Target, dryRun bool, dryPull bool, transform func(stri
 		logger:                     logger,
 		keychain:                   keychain,
 		requestTimeout:             requestTimeout,
+		registryRetry:              retry,
 		failureCooldown:            failureCooldown,
 		failed:                     make(map[string]time.Time),
 		now:                        time.Now,
@@ -851,36 +871,41 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 	log.Info("pushing image to target", "digest", srcDigest.String())
 	log.V(1).Info("push progress update", "percentage", "0%")
 
-	pushCtx, cancelPush := p.operationContext(ctx)
-	updates := make(chan v1.Update, 16)
-	var progressWG sync.WaitGroup
-	progressWG.Add(1)
-	go func() {
-		defer progressWG.Done()
-		logProgressUpdates(log, "push", updates)
-	}()
+	err = p.withRetry(ctx, log, "push", func() error {
+		pushCtx, cancelPush := p.operationContext(ctx)
 
-	if pushIndex {
-		err = remoteWriteIndexFunc(
-			targetRef,
-			idx,
-			remote.WithAuth(auth),
-			remote.WithContext(pushCtx),
-			remote.WithTransport(p.targetTransport),
-			remote.WithProgress(updates),
-		)
-	} else {
-		err = remoteWriteFunc(
-			targetRef,
-			img,
-			remote.WithAuth(auth),
-			remote.WithContext(pushCtx),
-			remote.WithTransport(p.targetTransport),
-			remote.WithProgress(updates),
-		)
-	}
-	cancelPush()
-	progressWG.Wait()
+		updates := make(chan v1.Update, 16)
+		var progressWG sync.WaitGroup
+		progressWG.Add(1)
+		go func() {
+			defer progressWG.Done()
+			logProgressUpdates(log, "push", updates)
+		}()
+
+		var writeErr error
+		if pushIndex {
+			writeErr = remoteWriteIndexFunc(
+				targetRef,
+				idx,
+				remote.WithAuth(auth),
+				remote.WithContext(pushCtx),
+				remote.WithTransport(p.targetTransport),
+				remote.WithProgress(updates),
+			)
+		} else {
+			writeErr = remoteWriteFunc(
+				targetRef,
+				img,
+				remote.WithAuth(auth),
+				remote.WithContext(pushCtx),
+				remote.WithTransport(p.targetTransport),
+				remote.WithProgress(updates),
+			)
+		}
+		cancelPush()
+		progressWG.Wait()
+		return writeErr
+	})
 	if err != nil {
 		logRegistryAuthError(log, err, "push")
 		metrics.RecordPushError(target)
@@ -1048,6 +1073,84 @@ func (p *pusher) operationContext(ctx context.Context) (context.Context, context
 		return ctx, func() {}
 	}
 	return context.WithTimeout(ctx, p.requestTimeout)
+}
+
+func (p *pusher) withRetry(ctx context.Context, log logr.Logger, operation string, fn func() error) error {
+	attempts := p.registryRetry.Attempts
+	if attempts <= 0 {
+		attempts = 1
+	}
+	backoff := p.registryRetry.Backoff
+	if backoff < 0 {
+		backoff = 0
+	}
+
+	var err error
+	for attempt := 1; attempt <= attempts; attempt++ {
+		err = fn()
+		if err == nil {
+			return nil
+		}
+		if attempt == attempts || !isRetryableRegistryError(err) {
+			return err
+		}
+
+		log.Error(
+			err,
+			fmt.Sprintf("%s failed; retrying", operation),
+			"attempt", attempt,
+			"maxAttempts", attempts,
+			"retryBackoff", backoff.String(),
+		)
+		if backoff <= 0 {
+			continue
+		}
+		timer := time.NewTimer(backoff)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+
+	return err
+}
+
+func isRetryableRegistryError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	if errors.Is(err, context.Canceled) {
+		return false
+	}
+	if errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, io.EOF) {
+		return true
+	}
+
+	var transportErr *remotetransport.Error
+	if errors.As(err, &transportErr) {
+		switch transportErr.StatusCode {
+		case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+			return true
+		default:
+			return false
+		}
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Timeout()
+	}
+
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "broken pipe") ||
+		strings.Contains(msg, "use of closed network connection") ||
+		strings.Contains(msg, "server closed idle connection")
 }
 
 func (p *pusher) beginProcessing(target string, log logr.Logger) (bool, error) {

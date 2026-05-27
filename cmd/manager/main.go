@@ -158,6 +158,10 @@ func main() {
 		cfg.AllowDifferentDigestRepush,
 		cfg.ExcludedRegistries,
 		cfg.MirrorPlatforms,
+		mirror.RetryConfig{
+			Attempts: cfg.RegistryRetryAttempts,
+			Backoff:  cfg.RegistryRetryBackoff,
+		},
 	)
 	forceReconciler, err := controllers.SetupAll(mgr, pusher, cfg.AllowedNS, cfg.SkipCfg, cfg.WatchResources, cfg.MaxConcurrentReconciles, cfg.CheckNodePlatform)
 	if err != nil {

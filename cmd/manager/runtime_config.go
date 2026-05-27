@@ -39,6 +39,8 @@ type runtimeConfig struct {
 	DryPull                    bool
 	PathMap                    []util.PathMapping
 	RequestTimeout             time.Duration
+	RegistryRetryAttempts      int
+	RegistryRetryBackoff       time.Duration
 	Keychain                   authn.Keychain
 	FailureCooldown            time.Duration
 	DigestPull                 bool
@@ -52,7 +54,7 @@ type runtimeConfig struct {
 	ForceResync                time.Duration
 }
 
-const defaultRequestTimeout = 2 * time.Minute
+const defaultRequestTimeout = 5 * time.Minute
 const defaultMaxConcurrentReconciles = 2
 
 // loadRuntimeConfig resolves configuration from env vars and the optional config file.
@@ -203,6 +205,40 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		}
 	}
 
+	retryAttempts := mirror.DefaultRegistryRetryAttempts
+	if v := strings.TrimSpace(os.Getenv("REGISTRY_RETRY_ATTEMPTS")); v != "" {
+		parsed, parseErr := strconv.Atoi(v)
+		if parseErr != nil {
+			return runtimeConfig{}, fmt.Errorf("parse registry retry attempts: %w", parseErr)
+		}
+		if parsed <= 0 {
+			return runtimeConfig{}, fmt.Errorf("registry retry attempts must be greater than zero")
+		}
+		retryAttempts = parsed
+	} else if fileCfg.RegistryRetryAttempts != nil {
+		if *fileCfg.RegistryRetryAttempts <= 0 {
+			return runtimeConfig{}, fmt.Errorf("registryRetryAttempts in config must be greater than zero")
+		}
+		retryAttempts = *fileCfg.RegistryRetryAttempts
+	}
+
+	retryBackoff := mirror.DefaultRegistryRetryBackoff
+	if v := strings.TrimSpace(os.Getenv("REGISTRY_RETRY_BACKOFF")); v != "" {
+		parsed, parseErr := strconv.Atoi(v)
+		if parseErr != nil {
+			return runtimeConfig{}, fmt.Errorf("parse registry retry backoff: %w", parseErr)
+		}
+		if parsed < 0 {
+			return runtimeConfig{}, fmt.Errorf("registry retry backoff must not be negative")
+		}
+		retryBackoff = time.Duration(parsed) * time.Second
+	} else if fileCfg.RegistryRetryBackoffSeconds != nil {
+		if *fileCfg.RegistryRetryBackoffSeconds < 0 {
+			return runtimeConfig{}, fmt.Errorf("registryRetryBackoff in config must not be negative")
+		}
+		retryBackoff = time.Duration(*fileCfg.RegistryRetryBackoffSeconds) * time.Second
+	}
+
 	cooldownMinutes := strings.TrimSpace(os.Getenv("FAILURE_COOLDOWN_MINUTES"))
 	failureCooldown := mirror.DefaultFailureCooldown
 	if cooldownMinutes != "" {
@@ -292,6 +328,8 @@ func loadRuntimeConfig(ctx context.Context, dryRunFlag, dryPullFlag bool, fileCf
 		DryPull:                    dryPull,
 		PathMap:                    fileCfg.PathMap,
 		RequestTimeout:             timeout,
+		RegistryRetryAttempts:      retryAttempts,
+		RegistryRetryBackoff:       retryBackoff,
 		Keychain:                   keychain,
 		FailureCooldown:            failureCooldown,
 		DigestPull:                 digestPull,

@@ -264,6 +264,45 @@ func TestMirrorRecordsPullErrorMetric(t *testing.T) {
 	}
 }
 
+func TestWithRetryRetriesDeadlineExceeded(t *testing.T) {
+	p := &pusher{
+		registryRetry: RetryConfig{Attempts: 3, Backoff: 0},
+	}
+
+	attempts := 0
+	err := p.withRetry(context.Background(), testr.New(t), "push", func() error {
+		attempts++
+		if attempts < 3 {
+			return context.DeadlineExceeded
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("expected retry to eventually succeed, got %v", err)
+	}
+	if attempts != 3 {
+		t.Fatalf("expected 3 attempts, got %d", attempts)
+	}
+}
+
+func TestWithRetryDoesNotRetryAuthErrors(t *testing.T) {
+	p := &pusher{
+		registryRetry: RetryConfig{Attempts: 3, Backoff: 0},
+	}
+
+	attempts := 0
+	err := p.withRetry(context.Background(), testr.New(t), "push", func() error {
+		attempts++
+		return &remotetransport.Error{StatusCode: http.StatusUnauthorized}
+	})
+	if err == nil {
+		t.Fatalf("expected auth error")
+	}
+	if attempts != 1 {
+		t.Fatalf("expected auth error to fail without retry, got %d attempts", attempts)
+	}
+}
+
 func TestMirrorSkipsSourcePullWhenTargetDigestMatches(t *testing.T) {
 	metrics.Reset()
 	t.Cleanup(metrics.Reset)

@@ -60,12 +60,14 @@ type Config struct {
 	WatchResources             []string             `yaml:"watchResources"`
 	DryRun                     bool                 `yaml:"dryRun"`
 	DryPull                    bool                 `yaml:"dryPull"`
-	RequestTimeoutSeconds      *int                 `yaml:"requestTimeout"`
-	FailureCooldownMinutes     *int                 `yaml:"failureCooldownMinutes"`
-	ForceReconcileMinutes      *int                 `yaml:"forceReconcileMinutes"`
-	MaxConcurrentReconciles    *int                 `yaml:"maxConcurrentReconciles"`
-	RegistryCredentials        []RegistryCredential `yaml:"registryCredentials"`
-	PathMap                    []util.PathMapping   `yaml:"pathMap"`
+	RequestTimeoutSeconds       *int                `yaml:"requestTimeout"`
+	RegistryRetryAttempts       *int                `yaml:"registryRetryAttempts"`
+	RegistryRetryBackoffSeconds *int                `yaml:"registryRetryBackoff"`
+	FailureCooldownMinutes      *int                `yaml:"failureCooldownMinutes"`
+	ForceReconcileMinutes       *int                `yaml:"forceReconcileMinutes"`
+	MaxConcurrentReconciles     *int                `yaml:"maxConcurrentReconciles"`
+	RegistryCredentials         []RegistryCredential `yaml:"registryCredentials"`
+	PathMap                     []util.PathMapping   `yaml:"pathMap"`
 }
 
 // ResourceSkipNames declares resource names that should be ignored by copycat.

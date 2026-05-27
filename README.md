@@ -138,7 +138,9 @@ Copycat is configured through a combination of environment variables and a YAML 
 
 **Operations and observability**
 
-- `REGISTRY_REQUEST_TIMEOUT`: timeout (in seconds) for individual pull/push operations (`120` by default).
+- `REGISTRY_REQUEST_TIMEOUT`: timeout (in seconds) for individual pull/push operations (`300` by default).
+- `REGISTRY_RETRY_ATTEMPTS`: total attempts for retryable registry operations such as timed-out pushes (`3` by default).
+- `REGISTRY_RETRY_BACKOFF`: delay in seconds between retry attempts (`10` by default).
 - `FAILURE_COOLDOWN_MINUTES`: wait time before retrying a failed mirror (`60` by default, `0` disables the cooldown).
 - `METRICS_ADDR`: bind address for Prometheus metrics (`:8080` by default).
 - `MAX_CONCURRENT_RECONCILES`: overrides the worker count per controller (defaults to `2`).
@@ -262,7 +264,9 @@ pathMap:
   - from: "^legacy/(.*)"
     to: "modern/$1"
     regex: true
-requestTimeout: 120              # seconds; set to 0 to disable per-request deadlines
+requestTimeout: 300              # seconds; set to 0 to disable per-request deadlines
+registryRetryAttempts: 3         # total attempts for retryable registry operations
+registryRetryBackoff: 10         # seconds between retry attempts
 failureCooldownMinutes: 60       # retry failed pushes after one hour; set to 0 to disable the cooldown
 forceReconcileMinutes: 30        # rescan all watched resources every 30 minutes; set to 0 to disable the periodic resync
 registryCredentials:
