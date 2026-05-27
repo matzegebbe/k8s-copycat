@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 
@@ -152,6 +154,36 @@ func TestResolveOptionalBoolEnv(t *testing.T) {
 
 	if _, _, err := resolveOptionalBoolEnv("not-a-bool"); err == nil {
 		t.Fatalf("expected invalid bool env to return error")
+	}
+}
+
+func TestLoadRuntimeConfigRegistryRetryFromConfig(t *testing.T) {
+	t.Setenv("TARGET_KIND", "")
+	t.Setenv("TARGET_REGISTRY", "")
+	t.Setenv("REGISTRY_REQUEST_TIMEOUT", "")
+	t.Setenv("REGISTRY_RETRY_ATTEMPTS", "")
+	t.Setenv("REGISTRY_RETRY_BACKOFF", "")
+
+	attempts := 4
+	backoff := 15
+	cfg, err := loadRuntimeConfig(context.Background(), false, false, config.Config{
+		TargetKind:                  "docker",
+		Docker:                      config.Docker{Registry: "example.com"},
+		RegistryRetryAttempts:       &attempts,
+		RegistryRetryBackoffSeconds: &backoff,
+	}, true)
+	if err != nil {
+		t.Fatalf("unexpected config error: %v", err)
+	}
+
+	if cfg.RegistryRetryAttempts != attempts {
+		t.Fatalf("expected retry attempts %d, got %d", attempts, cfg.RegistryRetryAttempts)
+	}
+	if cfg.RegistryRetryBackoff != 15*time.Second {
+		t.Fatalf("expected retry backoff 15s, got %s", cfg.RegistryRetryBackoff)
+	}
+	if cfg.RequestTimeout != defaultRequestTimeout {
+		t.Fatalf("expected default request timeout %s, got %s", defaultRequestTimeout, cfg.RequestTimeout)
 	}
 }
 
