@@ -23,10 +23,6 @@ import (
 	"github.com/matzegebbe/k8s-copycat/pkg/util"
 )
 
-const (
-	defaultRetryDelay = time.Hour
-)
-
 // SkipConfig declares which namespaces or object names should be ignored by the controllers.
 type SkipConfig struct {
 	Namespaces   []string
@@ -410,13 +406,11 @@ func mirrorResultForError(err error) (ctrl.Result, error) {
 	}
 	var retryErr *mirror.RetryError
 	if errors.As(err, &retryErr) {
-		delay := time.Until(retryErr.RetryAt)
-		if delay <= 0 {
-			delay = defaultRetryDelay
+		if delay := time.Until(retryErr.RetryAt); delay > 0 {
+			return ctrl.Result{RequeueAfter: delay}, nil
 		}
-		return ctrl.Result{RequeueAfter: delay}, nil
 	}
-	return ctrl.Result{RequeueAfter: defaultRetryDelay}, nil
+	return ctrl.Result{}, err
 }
 
 type workloadFetcher func(context.Context, client.Client, types.NamespacedName) (string, string, *corev1.PodSpec, error)
