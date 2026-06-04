@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.11
 	github.com/aws/aws-sdk-go-v2/config v1.32.22
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.21
-	github.com/aws/aws-sdk-go-v2/service/ecr v1.57.3
+	github.com/aws/aws-sdk-go-v2/service/ecr v1.58.2
 	github.com/aws/aws-sdk-go-v2/service/sts v1.43.1
 	github.com/go-logr/logr v1.4.3
 	github.com/google/go-containerregistry v0.21.6
