@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.29.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.28.0...v0.29.0) (2026-06-04)
+
+
+### Features
+
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#254](https://github.com/matzegebbe/k8s-copycat/issues/254)) ([e95e691](https://github.com/matzegebbe/k8s-copycat/commit/e95e6913870ce2f970b1305ffcb75febcce47c6b))
+* **deps:** bump the go-patch group across 1 directory with 4 updates ([#253](https://github.com/matzegebbe/k8s-copycat/issues/253)) ([218564b](https://github.com/matzegebbe/k8s-copycat/commit/218564b4445f2a0d42a2a3dbf8d7d7d8204c6a1b))
+* **deps:** bump the go-patch group with 5 updates ([#249](https://github.com/matzegebbe/k8s-copycat/issues/249)) ([65d74b0](https://github.com/matzegebbe/k8s-copycat/commit/65d74b0632b40686ed69193c9e7028d25a4c67ec))
+
+
+### Bug Fixes
+
+* **controllers:** honor failureCooldownMinutes=0 instead of waiting 1h ([#252](https://github.com/matzegebbe/k8s-copycat/issues/252)) ([25dbc0e](https://github.com/matzegebbe/k8s-copycat/commit/25dbc0ecc2819439ec782fe242d7db48ab83fbbf))
+
 ## [0.28.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.27.1...v0.28.0) (2026-05-27)
 
 
