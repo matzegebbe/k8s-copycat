@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.30.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.29.0...v0.30.0) (2026-06-11)
+
+
+### Features
+
+* **deps:** bump alpine from 3.23 to 3.24 ([#259](https://github.com/matzegebbe/k8s-copycat/issues/259)) ([fe9fabc](https://github.com/matzegebbe/k8s-copycat/commit/fe9fabc71fa4633063637f474b51f4d4e52570b0))
+* **deps:** bump the go-patch group with 2 updates ([#260](https://github.com/matzegebbe/k8s-copycat/issues/260)) ([1766c6c](https://github.com/matzegebbe/k8s-copycat/commit/1766c6c835da7d2ba6be300276284c0b00d578e6))
+* **deps:** bump the go-patch group with 4 updates ([#257](https://github.com/matzegebbe/k8s-copycat/issues/257)) ([34dedfd](https://github.com/matzegebbe/k8s-copycat/commit/34dedfd8bed9370f23e094464c0f766b1239f8f5))
+* **deps:** bump the go-patch group with 5 updates ([#255](https://github.com/matzegebbe/k8s-copycat/issues/255)) ([45622c8](https://github.com/matzegebbe/k8s-copycat/commit/45622c801bf9f714b54781791f290b9e0e67dfd9))
+
 ## [0.29.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.28.0...v0.29.0) (2026-06-04)
 
 
