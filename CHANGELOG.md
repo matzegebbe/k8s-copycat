@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.32.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.31.0...v0.32.0) (2026-07-02)
+
+
+### Features
+
+* **deps:** bump actions/checkout from 6 to 7 ([#265](https://github.com/matzegebbe/k8s-copycat/issues/265)) ([22068d9](https://github.com/matzegebbe/k8s-copycat/commit/22068d95fbddeefb3e4a09c7e78b7c45590a1b1d))
+* **deps:** bump github.com/google/go-containerregistry ([#263](https://github.com/matzegebbe/k8s-copycat/issues/263)) ([b8589e0](https://github.com/matzegebbe/k8s-copycat/commit/b8589e05e95bf45d4f827ae37ceb9dbdcdfbf227))
+* **deps:** bump golang.org/x/net from 0.49.0 to 0.55.0 ([#268](https://github.com/matzegebbe/k8s-copycat/issues/268)) ([2e062da](https://github.com/matzegebbe/k8s-copycat/commit/2e062da4c95eb89e57bcf5b1c242cabb93d77436))
+* **deps:** bump the go-patch group with 4 updates ([#266](https://github.com/matzegebbe/k8s-copycat/issues/266)) ([6646bb7](https://github.com/matzegebbe/k8s-copycat/commit/6646bb76eae853170756c55301c43b5ac04a632f))
+* **deps:** bump the go-patch group with 5 updates ([#267](https://github.com/matzegebbe/k8s-copycat/issues/267)) ([cc923d5](https://github.com/matzegebbe/k8s-copycat/commit/cc923d52d7b34928876b92d19a37dc0b1ce87ac5))
+
 ## [0.31.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.30.0...v0.31.0) (2026-06-15)
 
 
