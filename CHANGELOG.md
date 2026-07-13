@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.33.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.32.0...v0.33.0) (2026-07-09)
+
+
+### Features
+
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#270](https://github.com/matzegebbe/k8s-copycat/issues/270)) ([0a4fee3](https://github.com/matzegebbe/k8s-copycat/commit/0a4fee35466c5fc3d6c0e2c42260197a69deb5c2))
+* **deps:** bump the go-patch group with 2 updates ([#272](https://github.com/matzegebbe/k8s-copycat/issues/272)) ([df8e2ed](https://github.com/matzegebbe/k8s-copycat/commit/df8e2edad90bc23196c874efe4610bc338f67e1a))
+* **deps:** bump the go-patch group with 3 updates ([#269](https://github.com/matzegebbe/k8s-copycat/issues/269)) ([16798f7](https://github.com/matzegebbe/k8s-copycat/commit/16798f70714035019cf8b6a57adc8757bce30384))
+
 ## [0.32.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.31.0...v0.32.0) (2026-07-02)
 
 
