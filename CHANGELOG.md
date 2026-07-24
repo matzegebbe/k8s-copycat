@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.34.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.33.0...v0.34.0) (2026-07-24)
+
+
+### Features
+
+* **deps:** bump actions/setup-go from 6 to 7 ([#274](https://github.com/matzegebbe/k8s-copycat/issues/274)) ([bcb7b06](https://github.com/matzegebbe/k8s-copycat/commit/bcb7b06553b3ecc8e0a641ad27a6aed63da6d0ae))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#280](https://github.com/matzegebbe/k8s-copycat/issues/280)) ([153897d](https://github.com/matzegebbe/k8s-copycat/commit/153897de6d37d836fe94f34b812f4c3ffc180401))
+* **deps:** bump github.com/go-logr/logr in the go-patch group ([#276](https://github.com/matzegebbe/k8s-copycat/issues/276)) ([d8c59e8](https://github.com/matzegebbe/k8s-copycat/commit/d8c59e86ac1e6d82780a961c83f86dc68198863c))
+* **deps:** bump github.com/prometheus/client_golang ([#277](https://github.com/matzegebbe/k8s-copycat/issues/277)) ([48b0faf](https://github.com/matzegebbe/k8s-copycat/commit/48b0faf9b069f60aef4382140dae8fd11a60bd53))
+* **deps:** bump the go-patch group across 1 directory with 4 updates ([#273](https://github.com/matzegebbe/k8s-copycat/issues/273)) ([3271643](https://github.com/matzegebbe/k8s-copycat/commit/327164312f16dba9b0bacbf640465d4f7a8804ec))
+* **deps:** bump the go-patch group with 3 updates ([#278](https://github.com/matzegebbe/k8s-copycat/issues/278)) ([cd0b5c6](https://github.com/matzegebbe/k8s-copycat/commit/cd0b5c6e33e343b7c2a631f974dba4bf4b706ca5))
+* **deps:** bump the go-patch group with 3 updates ([#281](https://github.com/matzegebbe/k8s-copycat/issues/281)) ([316be07](https://github.com/matzegebbe/k8s-copycat/commit/316be07a0ecd489e218a8bfff41bd71a73f55599))
+
 ## [0.33.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.32.0...v0.33.0) (2026-07-09)
 
 
