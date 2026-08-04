@@ -1,0 +1,65 @@
+name: Lint
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  golangci-lint:
+    name: Format and lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check gofmt
+        run: |
+          unformatted="$(gofmt -l cmd internal pkg)"
+          if [ -n "${unformatted}" ]; then
+            echo "The following files are not gofmt-compliant:"
+            echo "${unformatted}"
+            echo "Run 'gofmt -w cmd internal pkg' to fix."
+            exit 1
+          fi
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: latest
+
+  commit-check:
+    name: Conventional commits
+    # Only meaningful on PRs (needs a merge base + PR head sha). Dependabot
+    # already emits Conventional Commit messages and runs with a restricted
+    # token, so skip the check on its PRs to avoid false failures.
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: commit-check/commit-check-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          message: true
+          branch: true
+          author-name: true
+          author-email: true
+          commit-signoff: false
+          merge-base: true
+          imperative: false
+          job-summary: true

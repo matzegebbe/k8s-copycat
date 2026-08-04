@@ -1717,10 +1717,6 @@ func normalizeImageReference(val string) string {
 	// Detect by checking whether the first path component contains a dot or colon.
 	if firstSlash := strings.IndexByte(trimmed, '/'); firstSlash == -1 {
 		// Single-name image like "nginx:latest" → "docker.io/library/nginx:latest"
-		name := trimmed
-		if idx := strings.IndexAny(name, ":@"); idx != -1 {
-			name = name[:idx]
-		}
 		trimmed = "docker.io/library/" + trimmed
 	} else {
 		firstComponent := trimmed[:firstSlash]

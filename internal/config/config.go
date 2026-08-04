@@ -43,29 +43,29 @@ type RegistryCredential struct {
 }
 
 type Config struct {
-	TargetKind                 string               `yaml:"targetKind"` // ecr | docker
-	LogLevel                   string               `yaml:"logLevel"`
-	ECR                        ECR                  `yaml:"ecr"`
-	Docker                     Docker               `yaml:"docker"`
-	DigestPull                 bool                 `yaml:"digestPull"`
-	DigestPullIgnoredTags      []string             `yaml:"digestPullIgnoredTags"`
-	IgnoreMissingPlatforms     []string             `yaml:"ignoreMissingPlatforms"`
-	CheckNodePlatform          bool                 `yaml:"checkNodePlatform"`
-	MirrorPlatforms            []string             `yaml:"mirrorPlatforms"`
-	AllowDifferentDigestRepush *bool                `yaml:"allowDifferentDigestRepush"`
-	IncludeNamespaces          []string             `yaml:"includeNamespaces"`
-	SkipNamespaces             []string             `yaml:"skipNamespaces"`
-	SkipNames                  ResourceSkipNames    `yaml:"skipNames"`
-	ExcludeRegistries          []string             `yaml:"excludeRegistries"`
-	WatchResources             []string             `yaml:"watchResources"`
-	DryRun                     bool                 `yaml:"dryRun"`
-	DryPull                    bool                 `yaml:"dryPull"`
-	RequestTimeoutSeconds       *int                `yaml:"requestTimeout"`
-	RegistryRetryAttempts       *int                `yaml:"registryRetryAttempts"`
-	RegistryRetryBackoffSeconds *int                `yaml:"registryRetryBackoff"`
-	FailureCooldownMinutes      *int                `yaml:"failureCooldownMinutes"`
-	ForceReconcileMinutes       *int                `yaml:"forceReconcileMinutes"`
-	MaxConcurrentReconciles     *int                `yaml:"maxConcurrentReconciles"`
+	TargetKind                  string               `yaml:"targetKind"` // ecr | docker
+	LogLevel                    string               `yaml:"logLevel"`
+	ECR                         ECR                  `yaml:"ecr"`
+	Docker                      Docker               `yaml:"docker"`
+	DigestPull                  bool                 `yaml:"digestPull"`
+	DigestPullIgnoredTags       []string             `yaml:"digestPullIgnoredTags"`
+	IgnoreMissingPlatforms      []string             `yaml:"ignoreMissingPlatforms"`
+	CheckNodePlatform           bool                 `yaml:"checkNodePlatform"`
+	MirrorPlatforms             []string             `yaml:"mirrorPlatforms"`
+	AllowDifferentDigestRepush  *bool                `yaml:"allowDifferentDigestRepush"`
+	IncludeNamespaces           []string             `yaml:"includeNamespaces"`
+	SkipNamespaces              []string             `yaml:"skipNamespaces"`
+	SkipNames                   ResourceSkipNames    `yaml:"skipNames"`
+	ExcludeRegistries           []string             `yaml:"excludeRegistries"`
+	WatchResources              []string             `yaml:"watchResources"`
+	DryRun                      bool                 `yaml:"dryRun"`
+	DryPull                     bool                 `yaml:"dryPull"`
+	RequestTimeoutSeconds       *int                 `yaml:"requestTimeout"`
+	RegistryRetryAttempts       *int                 `yaml:"registryRetryAttempts"`
+	RegistryRetryBackoffSeconds *int                 `yaml:"registryRetryBackoff"`
+	FailureCooldownMinutes      *int                 `yaml:"failureCooldownMinutes"`
+	ForceReconcileMinutes       *int                 `yaml:"forceReconcileMinutes"`
+	MaxConcurrentReconciles     *int                 `yaml:"maxConcurrentReconciles"`
 	RegistryCredentials         []RegistryCredential `yaml:"registryCredentials"`
 	PathMap                     []util.PathMapping   `yaml:"pathMap"`
 }
