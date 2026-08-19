@@ -1,0 +1,12 @@
+# Configuration for commit-check (https://github.com/commit-check/commit-check).
+# Everything not listed here keeps the tool's defaults.
+
+[commit]
+# Subjects here are conventional-commit style, not strictly imperative
+# (e.g. "chore(main): release 0.35.0"), so don't enforce imperative mood.
+subject_imperative = false
+
+[branch]
+# release-please opens its release PRs from a fixed branch name that cannot be
+# changed and does not follow Conventional Branch.
+allow_branch_names = ["release-please--branches--main"]
