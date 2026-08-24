@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.35.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.34.0...v0.35.0) (2026-08-24)
+
+
+### Features
+
+* **deps:** bump commit-check/commit-check-action from 1 to 2 ([#290](https://github.com/matzegebbe/k8s-copycat/issues/290)) ([29dbae7](https://github.com/matzegebbe/k8s-copycat/commit/29dbae7838e9ff06db839d4d79b1774020f63a0f))
+* **deps:** bump golang from 1.26 to 1.27 ([#296](https://github.com/matzegebbe/k8s-copycat/issues/296)) ([7232bb7](https://github.com/matzegebbe/k8s-copycat/commit/7232bb7a859acaf25a9422e05d0a427c694f8598))
+* **deps:** bump golangci/golangci-lint-action from 8 to 9 ([#289](https://github.com/matzegebbe/k8s-copycat/issues/289)) ([84ecbdd](https://github.com/matzegebbe/k8s-copycat/commit/84ecbddd7cea4114a047c61d5c7cb6258f060557))
+* **deps:** bump the go-patch group with 5 updates ([#293](https://github.com/matzegebbe/k8s-copycat/issues/293)) ([4a5c77a](https://github.com/matzegebbe/k8s-copycat/commit/4a5c77aaddb6ba0bbeae9bd0d465f7619a6f6735))
+* **deps:** bump the go-patch group with 5 updates ([#294](https://github.com/matzegebbe/k8s-copycat/issues/294)) ([77e4b99](https://github.com/matzegebbe/k8s-copycat/commit/77e4b9910983253899afe647306a4b39dc8f6c5d))
+* **deps:** bump the go-patch group with 6 updates ([#291](https://github.com/matzegebbe/k8s-copycat/issues/291)) ([319f706](https://github.com/matzegebbe/k8s-copycat/commit/319f706679d41701d502977e819935d96231324d))
+* **deps:** bump the go-patch group with 8 updates ([#297](https://github.com/matzegebbe/k8s-copycat/issues/297)) ([c579a58](https://github.com/matzegebbe/k8s-copycat/commit/c579a58ec47e14662e87d356b43215b4c273558f))
+
 ## [0.34.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.33.0...v0.34.0) (2026-08-04)
 
 
