@@ -34,9 +34,6 @@ rules:
   - apiGroups: ["batch"]
     resources: ["jobs","cronjobs"]
     verbs: ["get","list","watch"]
-  - apiGroups: ["coordination.k8s.io"]
-    resources: ["leases"]
-    verbs: ["get","list","watch","create","update","patch"]
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create","patch"]
@@ -49,6 +46,33 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: k8s-copycat-reader
+subjects:
+  - kind: ServiceAccount
+    name: k8s-copycat-manager
+    namespace: k8s-copycat
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: k8s-copycat-leader-election-role
+  namespace: k8s-copycat
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: k8s-copycat-leader-election-rolebinding
+  namespace: k8s-copycat
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: k8s-copycat-leader-election-role
 subjects:
   - kind: ServiceAccount
     name: k8s-copycat-manager
@@ -126,6 +150,11 @@ spec:
             #  value: "nightly"
             #- name: SKIP_PODS
             #  value: "custom-pod"
+          ports:
+            - containerPort: 8080
+              name: metrics
+            - containerPort: 8081
+              name: healthz
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits:   { cpu: 500m, memory: 256Mi }

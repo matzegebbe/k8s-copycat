@@ -111,7 +111,7 @@ func main() {
 		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "k8s-copycat.k8s-copycat",
+		LeaderElectionID:       "6b43217d.k8s-copycat",
 	}
 	var syncPeriodPtr *time.Duration
 	if cfg.ForceResync > 0 {
