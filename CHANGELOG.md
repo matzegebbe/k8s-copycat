@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.36.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.35.0...v0.36.0) (2026-09-08)
+
+
+### Features
+
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#304](https://github.com/matzegebbe/k8s-copycat/issues/304)) ([f828b28](https://github.com/matzegebbe/k8s-copycat/commit/f828b2823e8287c8c1c9b6a3a9977ffb990af841))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#309](https://github.com/matzegebbe/k8s-copycat/issues/309)) ([3446c7d](https://github.com/matzegebbe/k8s-copycat/commit/3446c7de907a185aa42165c6984626b189794b1d))
+* **deps:** bump github.com/google/go-containerregistry ([#298](https://github.com/matzegebbe/k8s-copycat/issues/298)) ([525973a](https://github.com/matzegebbe/k8s-copycat/commit/525973a8a1e31387099d92976c4da24766738ab3))
+* **deps:** bump github.com/google/go-containerregistry ([#305](https://github.com/matzegebbe/k8s-copycat/issues/305)) ([9ab4e00](https://github.com/matzegebbe/k8s-copycat/commit/9ab4e00ea66046928d29a88e8b559beb17637ee9))
+* **deps:** bump helm/kind-action from 1.14.0 to 1.15.0 ([#302](https://github.com/matzegebbe/k8s-copycat/issues/302)) ([19956fe](https://github.com/matzegebbe/k8s-copycat/commit/19956fe6eab624834461b72b836ddcff6dec05f0))
+* **deps:** bump sigs.k8s.io/controller-runtime in the go-minor group ([#306](https://github.com/matzegebbe/k8s-copycat/issues/306)) ([53cd4a3](https://github.com/matzegebbe/k8s-copycat/commit/53cd4a3af9596b144d7b7aafae89ee8f43c168c7))
+* **deps:** bump the go-minor group with 7 updates ([#301](https://github.com/matzegebbe/k8s-copycat/issues/301)) ([61f2821](https://github.com/matzegebbe/k8s-copycat/commit/61f28211ed24648cd5f93eeb3f8fda8556c9c89b))
+* **deps:** bump the go-patch group with 3 updates ([#307](https://github.com/matzegebbe/k8s-copycat/issues/307)) ([37e8252](https://github.com/matzegebbe/k8s-copycat/commit/37e825241666c06a37b2feb5a7cd2503d241b794))
+* **deps:** bump the go-patch group with 4 updates ([#303](https://github.com/matzegebbe/k8s-copycat/issues/303)) ([563d2d3](https://github.com/matzegebbe/k8s-copycat/commit/563d2d380f1abd6af7198d0ce336793941dbd0db))
+
+
+### Bug Fixes
+
+* update controller configuration naming and RBAC scoping ([#300](https://github.com/matzegebbe/k8s-copycat/issues/300)) ([2c66e52](https://github.com/matzegebbe/k8s-copycat/commit/2c66e52c74528f46d093e045e2af902468f26f50))
+
 ## [0.35.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.34.0...v0.35.0) (2026-08-24)
 
 
