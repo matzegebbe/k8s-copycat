@@ -71,12 +71,12 @@ func registryLabel(image string) string {
 	trimmed = strings.TrimPrefix(trimmed, "https://")
 	trimmed = strings.TrimPrefix(trimmed, "http://")
 
-	idx := strings.Index(trimmed, "/")
-	if idx < 0 {
+	first, _, ok := strings.Cut(trimmed, "/")
+	if !ok {
 		return "docker.io"
 	}
 
-	first := strings.TrimSpace(trimmed[:idx])
+	first = strings.TrimSpace(first)
 	if first == "" {
 		return ""
 	}

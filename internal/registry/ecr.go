@@ -56,19 +56,18 @@ func (c *ecrClient) EnsureRepository(ctx context.Context, name string) error {
 
 	describeInput := &ecr.DescribeRepositoriesInput{RepositoryNames: []string{name}}
 	if c.cfg.AccountID != "" {
-		describeInput.RegistryId = aws.String(c.cfg.AccountID)
+		describeInput.RegistryId = new(c.cfg.AccountID)
 	}
 
 	if _, err := c.client.DescribeRepositories(ctx, describeInput); err == nil {
 		log.V(1).Info("repository already exists")
 		return nil
 	} else {
-		var rnfe *types.RepositoryNotFoundException
-		if c.cfg.CreateRepo && (errors.As(err, &rnfe) || strings.Contains(err.Error(), "RepositoryNotFound")) {
+		if c.cfg.CreateRepo && isRepositoryNotFound(err) {
 			log.Info("creating repository")
-			createInput := &ecr.CreateRepositoryInput{RepositoryName: &name}
+			createInput := &ecr.CreateRepositoryInput{RepositoryName: new(name)}
 			if c.cfg.AccountID != "" {
-				createInput.RegistryId = aws.String(c.cfg.AccountID)
+				createInput.RegistryId = new(c.cfg.AccountID)
 			}
 			if _, createErr := c.client.CreateRepository(ctx, createInput); createErr != nil {
 				log.Error(createErr, "failed to create repository")
@@ -78,11 +77,11 @@ func (c *ecrClient) EnsureRepository(ctx context.Context, name string) error {
 			policy := strings.TrimSpace(c.cfg.LifecyclePolicy)
 			if policy != "" {
 				putInput := &ecr.PutLifecyclePolicyInput{
-					RepositoryName:      aws.String(name),
-					LifecyclePolicyText: aws.String(policy),
+					RepositoryName:      new(name),
+					LifecyclePolicyText: new(policy),
 				}
 				if c.cfg.AccountID != "" {
-					putInput.RegistryId = aws.String(c.cfg.AccountID)
+					putInput.RegistryId = new(c.cfg.AccountID)
 				}
 				if _, putErr := c.client.PutLifecyclePolicy(ctx, putInput); putErr != nil {
 					log.Error(putErr, "failed to apply lifecycle policy")
@@ -95,6 +94,11 @@ func (c *ecrClient) EnsureRepository(ctx context.Context, name string) error {
 		log.Error(err, "failed to describe repository")
 		return err
 	}
+}
+
+func isRepositoryNotFound(err error) bool {
+	_, ok := errors.AsType[*types.RepositoryNotFoundException](err)
+	return ok || strings.Contains(err.Error(), "RepositoryNotFound")
 }
 
 func (c *ecrClient) BasicAuth(ctx context.Context) (username, password string, err error) {

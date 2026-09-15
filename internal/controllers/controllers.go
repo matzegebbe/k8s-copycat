@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -377,8 +378,7 @@ func (r *baseReconciler) mirrorPodImages(ctx context.Context, ns, podName string
 				firstErr = err
 			}
 			if retryErr == nil {
-				var candidate *mirror.RetryError
-				if errors.As(err, &candidate) {
+				if candidate, ok := errors.AsType[*mirror.RetryError](err); ok {
 					retryErr = candidate
 				}
 			}
@@ -404,8 +404,7 @@ func mirrorResultForError(err error) (ctrl.Result, error) {
 	if err == nil {
 		return ctrl.Result{}, nil
 	}
-	var retryErr *mirror.RetryError
-	if errors.As(err, &retryErr) {
+	if retryErr, ok := errors.AsType[*mirror.RetryError](err); ok {
 		if delay := time.Until(retryErr.RetryAt); delay > 0 {
 			return ctrl.Result{RequeueAfter: delay}, nil
 		}
@@ -689,7 +688,7 @@ func SetupAll(mgr ctrl.Manager, pusher mirror.Pusher, allowedNS []string, skipCf
 	if len(watch) == 0 {
 		watch = AllResourceTypes()
 	}
-	force := &ForceReconciler{baseReconciler: base, watch: append([]ResourceType(nil), watch...)}
+	force := &ForceReconciler{baseReconciler: base, watch: slices.Clone(watch)}
 	logger := ctrl.Log.WithName("controllers")
 	for _, res := range watch {
 		switch res {

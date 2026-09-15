@@ -45,8 +45,8 @@ func NewRepoPathTransformer(mappings []PathMapping) func(string) string {
 				}
 				continue
 			}
-			if strings.HasPrefix(p, m.From) {
-				p = strings.TrimPrefix(p, m.From)
+			if remainder, ok := strings.CutPrefix(p, m.From); ok {
+				p = remainder
 				if m.To != "" {
 					p = strings.TrimSuffix(m.To, "/") + "/" + p
 				}

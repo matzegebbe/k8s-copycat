@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"reflect"
 	"testing"
 	"time"
@@ -166,7 +165,7 @@ func TestLoadRuntimeConfigRegistryRetryFromConfig(t *testing.T) {
 
 	attempts := 4
 	backoff := 15
-	cfg, err := loadRuntimeConfig(context.Background(), false, false, config.Config{
+	cfg, err := loadRuntimeConfig(t.Context(), false, false, config.Config{
 		TargetKind:                  "docker",
 		Docker:                      config.Docker{Registry: "example.com"},
 		RegistryRetryAttempts:       &attempts,

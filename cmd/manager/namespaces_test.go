@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"testing"
 
 	"github.com/go-logr/logr/testr"
@@ -17,7 +16,7 @@ func TestValidateAndExpandNamespaces(t *testing.T) {
 		&corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: "test-2"}},
 	)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	log := testr.New(t)
 
 	expanded, err := validateAndExpandNamespaces(ctx, log, client, []string{"default", "test-*"})
