@@ -88,8 +88,8 @@ func normalizeImageID(id string) string {
 	if id == "" {
 		return ""
 	}
-	if idx := strings.Index(id, "://"); idx >= 0 {
-		id = id[idx+3:]
+	if _, remainder, ok := strings.Cut(id, "://"); ok {
+		id = remainder
 	}
 	return strings.TrimSpace(id)
 }

@@ -6,10 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/http"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -117,8 +118,8 @@ func normalizeImageID(imageID string) string {
 	if trimmed == "" {
 		return ""
 	}
-	if idx := strings.Index(trimmed, "://"); idx >= 0 {
-		trimmed = trimmed[idx+3:]
+	if _, remainder, ok := strings.Cut(trimmed, "://"); ok {
+		trimmed = remainder
 	}
 	return strings.TrimSpace(trimmed)
 }
@@ -438,8 +439,8 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 			return ref, tgt, tgtErr
 		case name.Digest:
 			stripped := src
-			if idx := strings.Index(stripped, "@"); idx > 0 {
-				stripped = stripped[:idx]
+			if before, _, ok := strings.Cut(stripped, "@"); ok && before != "" {
+				stripped = before
 			}
 			// Try to honour the original tag when the source reference included both tag and digest.
 			if tagRef, tagErr := name.NewTag(stripped, name.WeakValidation); tagErr == nil {
@@ -876,11 +877,9 @@ func (p *pusher) Mirror(ctx context.Context, src string, meta Metadata) error {
 
 		updates := make(chan v1.Update, 16)
 		var progressWG sync.WaitGroup
-		progressWG.Add(1)
-		go func() {
-			defer progressWG.Done()
+		progressWG.Go(func() {
 			logProgressUpdates(log, "push", updates)
-		}()
+		})
 
 		var writeErr error
 		if pushIndex {
@@ -1010,8 +1009,8 @@ func logRegistryAuthError(log logr.Logger, err error, phase string) {
 }
 
 func detectRegistryAuthError(err error) (*registryAuthError, bool) {
-	var transportErr *remotetransport.Error
-	if !errors.As(err, &transportErr) {
+	transportErr, ok := errors.AsType[*remotetransport.Error](err)
+	if !ok {
 		return nil, false
 	}
 
@@ -1061,9 +1060,7 @@ func (p *pusher) ResetCooldown() (int, bool) {
 		return 0, true
 	}
 
-	for target := range p.failed {
-		delete(p.failed, target)
-	}
+	clear(p.failed)
 
 	return cleared, true
 }
@@ -1131,8 +1128,7 @@ func isRetryableRegistryError(err error) bool {
 		return true
 	}
 
-	var transportErr *remotetransport.Error
-	if errors.As(err, &transportErr) {
+	if transportErr, ok := errors.AsType[*remotetransport.Error](err); ok {
 		switch transportErr.StatusCode {
 		case http.StatusRequestTimeout, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 			return true
@@ -1141,8 +1137,7 @@ func isRetryableRegistryError(err error) bool {
 		}
 	}
 
-	var netErr net.Error
-	if errors.As(err, &netErr) {
+	if netErr, ok := errors.AsType[net.Error](err); ok {
 		return netErr.Timeout()
 	}
 
@@ -1599,11 +1594,7 @@ func resolveArchitecture(useIndex bool, idx v1.ImageIndex, img v1.Image) string 
 					seen[arch] = struct{}{}
 				}
 				if len(seen) > 0 {
-					vals := make([]string, 0, len(seen))
-					for arch := range seen {
-						vals = append(vals, arch)
-					}
-					sort.Strings(vals)
+					vals := slices.Sorted(maps.Keys(seen))
 					return strings.Join(vals, "-")
 				}
 			}
@@ -1653,9 +1644,8 @@ func expandRepoPrefix(prefix string, meta Metadata) string {
 	if expanded == "" {
 		return ""
 	}
-	segments := strings.Split(expanded, "/")
-	parts := make([]string, 0, len(segments))
-	for _, seg := range segments {
+	parts := make([]string, 0, strings.Count(expanded, "/")+1)
+	for seg := range strings.SplitSeq(expanded, "/") {
 		seg = strings.TrimSpace(seg)
 		if seg == "" {
 			continue
@@ -1677,12 +1667,7 @@ func normalizeExcludedRegistries(provided []string) []string {
 	if len(unique) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(unique))
-	for val := range unique {
-		out = append(out, val)
-	}
-	sort.Strings(out)
-	return out
+	return slices.Sorted(maps.Keys(unique))
 }
 
 func normalizeRegistryPrefix(val string) string {
@@ -1695,8 +1680,8 @@ func normalizeRegistryPrefix(val string) string {
 	trimmed = strings.TrimPrefix(trimmed, "http://")
 	trimmed = strings.TrimSuffix(trimmed, "/")
 	// Normalize Docker Hub aliases to docker.io.
-	if trimmed == "index.docker.io" || strings.HasPrefix(trimmed, "index.docker.io/") {
-		trimmed = "docker.io" + trimmed[len("index.docker.io"):]
+	if remainder, ok := strings.CutPrefix(trimmed, "index.docker.io"); ok && (remainder == "" || strings.HasPrefix(remainder, "/")) {
+		trimmed = "docker.io" + remainder
 	}
 	return trimmed
 }
@@ -1710,16 +1695,15 @@ func normalizeImageReference(val string) string {
 	trimmed = strings.TrimPrefix(trimmed, "https://")
 	trimmed = strings.TrimPrefix(trimmed, "http://")
 	// Normalize Docker Hub aliases to docker.io/.
-	if strings.HasPrefix(trimmed, "index.docker.io/") {
-		trimmed = "docker.io/" + trimmed[len("index.docker.io/"):]
+	if remainder, ok := strings.CutPrefix(trimmed, "index.docker.io/"); ok {
+		trimmed = "docker.io/" + remainder
 	}
 	// Bare image references (no registry prefix) are Docker Hub images.
 	// Detect by checking whether the first path component contains a dot or colon.
-	if firstSlash := strings.IndexByte(trimmed, '/'); firstSlash == -1 {
+	if firstComponent, _, ok := strings.Cut(trimmed, "/"); !ok {
 		// Single-name image like "nginx:latest" → "docker.io/library/nginx:latest"
 		trimmed = "docker.io/library/" + trimmed
 	} else {
-		firstComponent := trimmed[:firstSlash]
 		if !strings.ContainsAny(firstComponent, ".:") {
 			// e.g. "library/nginx" or "myuser/nginx" → "docker.io/..."
 			trimmed = "docker.io/" + trimmed
@@ -1732,13 +1716,14 @@ func hasBoundaryPrefix(s, prefix string) bool {
 	if prefix == "" {
 		return false
 	}
-	if !strings.HasPrefix(s, prefix) {
+	remainder, ok := strings.CutPrefix(s, prefix)
+	if !ok {
 		return false
 	}
-	if len(s) == len(prefix) {
+	if remainder == "" {
 		return true
 	}
-	next := s[len(prefix)]
+	next := remainder[0]
 	return next == '/' || next == ':' || next == '@'
 }
 

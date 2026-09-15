@@ -115,9 +115,8 @@ func main() {
 	}
 	var syncPeriodPtr *time.Duration
 	if cfg.ForceResync > 0 {
-		syncPeriod := cfg.ForceResync
-		syncPeriodPtr = &syncPeriod
-		logger.Info("configuring periodic full reconciliation", "interval", syncPeriod)
+		syncPeriodPtr = new(cfg.ForceResync)
+		logger.Info("configuring periodic full reconciliation", "interval", cfg.ForceResync)
 	}
 	switch {
 	case len(cfg.AllowedNS) == 0:

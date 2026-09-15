@@ -123,7 +123,7 @@ func TestPodReconcilerShouldSkip(t *testing.T) {
 		SkipPods:          newNameMatcher(nil),
 	}}
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	if skip, err := reconciler.shouldSkipPod(ctx, podFromDeployment); err != nil || !skip {
 		t.Fatalf("expected deployment pod to be skipped, skip=%v err=%v", skip, err)
@@ -158,12 +158,12 @@ func TestPodReconcilerNodePlatformToggle(t *testing.T) {
 	pod := &corev1.Pod{Spec: corev1.PodSpec{NodeName: "worker-1"}}
 
 	disabled := PodReconciler{baseReconciler{Client: client}}
-	if arch, os, err := disabled.nodePlatform(context.Background(), pod); err != nil || arch != "" || os != "" {
+	if arch, os, err := disabled.nodePlatform(t.Context(), pod); err != nil || arch != "" || os != "" {
 		t.Fatalf("expected empty platform without checkNodePlatform, got arch=%q os=%q err=%v", arch, os, err)
 	}
 
 	enabled := PodReconciler{baseReconciler{Client: client, CheckNodePlatform: true}}
-	arch, os, err := enabled.nodePlatform(context.Background(), pod)
+	arch, os, err := enabled.nodePlatform(t.Context(), pod)
 	if err != nil {
 		t.Fatalf("unexpected error resolving platform: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestMirrorPodImagesContinuesAfterError(t *testing.T) {
 	}
 
 	r := baseReconciler{Pusher: pusher}
-	ctx := ctrl.LoggerInto(context.Background(), testr.New(t))
+	ctx := ctrl.LoggerInto(t.Context(), testr.New(t))
 
 	mirrored, err := r.mirrorPodImages(ctx, "default", "pod", images, "", "")
 	if mirrored != 1 {
@@ -214,8 +214,8 @@ func TestMirrorPodImagesContinuesAfterError(t *testing.T) {
 	if len(pusher.calls) != len(images) {
 		t.Fatalf("expected pusher to be invoked for every image, got %d calls", len(pusher.calls))
 	}
-	var gotRetry *mirror.RetryError
-	if !errors.As(err, &gotRetry) {
+	gotRetry, ok := errors.AsType[*mirror.RetryError](err)
+	if !ok {
 		t.Fatalf("expected retry error, got %v", err)
 	}
 	if gotRetry != retry {
@@ -232,7 +232,7 @@ func TestMirrorPodImagesReturnsFirstErrorWithoutRetry(t *testing.T) {
 	}
 
 	r := baseReconciler{Pusher: pusher}
-	ctx := ctrl.LoggerInto(context.Background(), testr.New(t))
+	ctx := ctrl.LoggerInto(t.Context(), testr.New(t))
 
 	mirrored, err := r.mirrorPodImages(ctx, "default", "pod", images, "", "")
 	if mirrored != 1 {
@@ -250,7 +250,7 @@ func TestMirrorPodImagesPropagatesPlatformMetadata(t *testing.T) {
 	pusher := &recordingPusher{}
 	images := []util.PodImage{{Image: "docker.io/library/a:v1", ContainerName: "a"}}
 	r := baseReconciler{Pusher: pusher}
-	ctx := ctrl.LoggerInto(context.Background(), testr.New(t))
+	ctx := ctrl.LoggerInto(t.Context(), testr.New(t))
 
 	mirrored, err := r.mirrorPodImages(ctx, "default", "pod", images, "amd64", "linux")
 	if err != nil {
@@ -293,7 +293,7 @@ func TestPodReconcilerUsesRetryCooldownResult(t *testing.T) {
 		AllowedNamespaces: []string{"*"},
 	}}
 
-	result, err := reconciler.Reconcile(context.Background(), ctrl.Request{
+	result, err := reconciler.Reconcile(t.Context(), ctrl.Request{
 		NamespacedName: types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace},
 	})
 	if err != nil {
@@ -347,7 +347,7 @@ func TestForceReconcilePodsUsesPodImageStatusAndNodePlatform(t *testing.T) {
 		watch: []ResourceType{ResourcePods},
 	}
 
-	workloads, mirrored, err := reconciler.ForceReconcile(context.Background())
+	workloads, mirrored, err := reconciler.ForceReconcile(t.Context())
 	if err != nil {
 		t.Fatalf("unexpected force reconcile error: %v", err)
 	}

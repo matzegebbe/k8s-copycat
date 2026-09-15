@@ -385,8 +385,7 @@ func sanitizeStringList(values []string) []string {
 			continue
 		}
 		if strings.Contains(trimmed, ",") {
-			parts := strings.Split(trimmed, ",")
-			for _, part := range parts {
+			for part := range strings.SplitSeq(trimmed, ",") {
 				partTrimmed := strings.TrimSpace(part)
 				if partTrimmed != "" {
 					out = append(out, partTrimmed)

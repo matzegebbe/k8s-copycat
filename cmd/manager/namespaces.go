@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
+	"maps"
 	"path"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -75,15 +76,11 @@ func validateAndExpandNamespaces(ctx context.Context, log logr.Logger, client ku
 		results[sel] = struct{}{}
 	}
 	if len(missing) > 0 {
-		sort.Strings(missing)
+		slices.Sort(missing)
 		return nil, fmt.Errorf("configured namespace(s) do not exist: %s", strings.Join(missing, ", "))
 	}
 
-	expanded := make([]string, 0, len(results))
-	for name := range results {
-		expanded = append(expanded, name)
-	}
-	sort.Strings(expanded)
+	expanded := slices.Sorted(maps.Keys(results))
 	return expanded, nil
 }
 
@@ -102,6 +99,6 @@ func matchNamespacePattern(pattern string, candidates []string) ([]string, error
 			matches = append(matches, name)
 		}
 	}
-	sort.Strings(matches)
+	slices.Sort(matches)
 	return matches, nil
 }

@@ -251,7 +251,7 @@ func TestMirrorRecordsPullErrorMetric(t *testing.T) {
 	t.Cleanup(func() { remoteGetFunc = original })
 
 	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, nil, true, nil, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err := p.Mirror(ctx, "docker.io/library/nginx:latest", Metadata{})
 	if err == nil {
@@ -270,7 +270,7 @@ func TestWithRetryRetriesDeadlineExceeded(t *testing.T) {
 	}
 
 	attempts := 0
-	err := p.withRetry(context.Background(), testr.New(t), "push", func() error {
+	err := p.withRetry(t.Context(), testr.New(t), "push", func() error {
 		attempts++
 		if attempts < 3 {
 			return context.DeadlineExceeded
@@ -291,7 +291,7 @@ func TestWithRetryDoesNotRetryAuthErrors(t *testing.T) {
 	}
 
 	attempts := 0
-	err := p.withRetry(context.Background(), testr.New(t), "push", func() error {
+	err := p.withRetry(t.Context(), testr.New(t), "push", func() error {
 		attempts++
 		return &remotetransport.Error{StatusCode: http.StatusUnauthorized}
 	})
@@ -344,7 +344,7 @@ func TestMirrorSkipsSourcePullWhenTargetDigestMatches(t *testing.T) {
 
 	source := "docker.io/library/nginx@sha256:" + strings.Repeat("a", 64)
 
-	if err := p.Mirror(context.Background(), source, Metadata{}); err != nil {
+	if err := p.Mirror(t.Context(), source, Metadata{}); err != nil {
 		t.Fatalf("unexpected error from Mirror: %v", err)
 	}
 	if len(impl.pushed) != 0 {
@@ -383,10 +383,10 @@ func TestMirrorRechecksTargetAfterSuccessfulSkip(t *testing.T) {
 	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, nil, nil, true, nil, nil)
 	source := "docker.io/library/nginx@sha256:" + strings.Repeat("b", 64)
 
-	if err := p.Mirror(context.Background(), source, Metadata{}); err != nil {
+	if err := p.Mirror(t.Context(), source, Metadata{}); err != nil {
 		t.Fatalf("unexpected error from first Mirror call: %v", err)
 	}
-	if err := p.Mirror(context.Background(), source, Metadata{}); err != nil {
+	if err := p.Mirror(t.Context(), source, Metadata{}); err != nil {
 		t.Fatalf("unexpected error from second Mirror call: %v", err)
 	}
 
@@ -432,7 +432,7 @@ func TestMirrorContinuesPullWhenTargetDigestUnknown(t *testing.T) {
 
 	source := "docker.io/library/nginx@sha256:" + strings.Repeat("a", 64)
 
-	if err := p.Mirror(context.Background(), source, Metadata{}); err == nil {
+	if err := p.Mirror(t.Context(), source, Metadata{}); err == nil {
 		t.Fatalf("expected error from Mirror when source pull fails")
 	}
 
@@ -454,7 +454,7 @@ func TestMirrorRecordsPushErrorMetric(t *testing.T) {
 	t.Cleanup(metrics.Reset)
 
 	p := NewPusher(authErrorTarget{fakeTarget: fakeTarget{}, err: errors.New("auth failed")}, false, false, nil, testr.New(t), nil, 0, 0, false, nil, nil, true, nil, nil)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	err := p.Mirror(ctx, "docker.io/library/nginx:1.25", Metadata{})
 	if err == nil {
@@ -484,7 +484,7 @@ func TestMirrorDigestPullIgnoredTagSkipsPodImageIDDigest(t *testing.T) {
 	t.Cleanup(func() { remoteHeadFunc = originalHead })
 
 	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, []string{"latest"}, nil, true, nil, nil)
-	err := p.Mirror(context.Background(), "docker.io/library/nginx:latest", Metadata{
+	err := p.Mirror(t.Context(), "docker.io/library/nginx:latest", Metadata{
 		ImageID: "docker.io/library/nginx@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 	})
 	if err == nil || !strings.Contains(err.Error(), "stop test") {
@@ -506,7 +506,7 @@ func TestMirrorManifestUnknownIncludesOverwriteHint(t *testing.T) {
 	t.Cleanup(func() { remoteHeadFunc = originalHead })
 
 	p := NewPusher(fakeTarget{}, false, false, nil, testr.New(t), nil, 0, 0, true, nil, nil, true, nil, nil)
-	err := p.Mirror(context.Background(), "docker.io/library/nginx:1.25", Metadata{
+	err := p.Mirror(t.Context(), "docker.io/library/nginx:1.25", Metadata{
 		ImageID: "docker.io/library/nginx@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 	})
 	if err == nil {
@@ -655,7 +655,7 @@ func TestMirrorSkipsExcludedRegistry(t *testing.T) {
 		failed:             make(map[string]time.Time),
 	}
 
-	if err := p.Mirror(context.Background(), "example.com/repo:tag", Metadata{}); err != nil {
+	if err := p.Mirror(t.Context(), "example.com/repo:tag", Metadata{}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(p.pushed) != 0 {
@@ -705,7 +705,7 @@ func TestMirrorPopulatesRegistryMetadataFromSource(t *testing.T) {
 
 			p := NewPusher(fakeTarget{prefix: "$registry/$namespace"}, false, false, nil, logger, nil, 0, 0, false, nil, nil, true, nil, nil)
 
-			_ = p.Mirror(context.Background(), tc.source, Metadata{Namespace: "default"})
+			_ = p.Mirror(t.Context(), tc.source, Metadata{Namespace: "default"})
 
 			logMu.Lock()
 			defer logMu.Unlock()
@@ -735,7 +735,7 @@ func TestMirrorSkipsWithoutPodDigestWhenDigestPullEnabled(t *testing.T) {
 		requestTimeout: 0,
 	}
 
-	if err := p.Mirror(context.Background(), "docker.io/library/nginx:1.28", Metadata{Namespace: "default"}); err != nil {
+	if err := p.Mirror(t.Context(), "docker.io/library/nginx:1.28", Metadata{Namespace: "default"}); err != nil {
 		t.Fatalf("expected skip without error, got %v", err)
 	}
 	if len(p.pushed) != 0 {
@@ -777,7 +777,7 @@ func TestMirrorSkipsLoggingPushWhenDigestAlreadyPresent(t *testing.T) {
 	}
 
 	meta := Metadata{Namespace: "default", ImageID: normalized}
-	if err := p.Mirror(context.Background(), "docker.io/library/alpine:3.19", meta); err != nil {
+	if err := p.Mirror(t.Context(), "docker.io/library/alpine:3.19", meta); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
