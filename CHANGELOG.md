@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.38.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.37.0...v0.38.0) (2026-09-18)
+
+
+### Features
+
+* **deps:** bump sigs.k8s.io/controller-runtime in the go-patch group ([#315](https://github.com/matzegebbe/k8s-copycat/issues/315)) ([888d19c](https://github.com/matzegebbe/k8s-copycat/commit/888d19c92eb9cdedb391299e54afc840fa3ff0ac))
+* **deps:** bump the go-patch group with 3 updates ([#318](https://github.com/matzegebbe/k8s-copycat/issues/318)) ([79e446b](https://github.com/matzegebbe/k8s-copycat/commit/79e446b60e3d93d766b2c72563fea4cd4642a0aa))
+
 ## [0.37.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.36.0...v0.37.0) (2026-09-15)
 
 
