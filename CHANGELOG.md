@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.39.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.38.0...v0.39.0) (2026-10-09)
+
+
+### Features
+
+* **deps:** bump helm/kind-action from 1.15.0 to 1.15.1 ([#322](https://github.com/matzegebbe/k8s-copycat/issues/322)) ([a69667d](https://github.com/matzegebbe/k8s-copycat/commit/a69667ddf92d59b504b048379a57d14cfcb8334f))
+
 ## [0.38.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.37.0...v0.38.0) (2026-10-05)
 
 
