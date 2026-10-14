@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.39.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.38.0...v0.39.0) (2026-10-14)
+
+
+### Features
+
+* **deps:** bump github.com/prometheus/client_golang ([#325](https://github.com/matzegebbe/k8s-copycat/issues/325)) ([3af1d01](https://github.com/matzegebbe/k8s-copycat/commit/3af1d01edae7004872cfed7d005c1cc030c48c32))
+* **deps:** bump helm/kind-action from 1.15.0 to 1.15.1 ([#322](https://github.com/matzegebbe/k8s-copycat/issues/322)) ([a69667d](https://github.com/matzegebbe/k8s-copycat/commit/a69667ddf92d59b504b048379a57d14cfcb8334f))
+* **deps:** bump the go-patch group across 1 directory with 5 updates ([#324](https://github.com/matzegebbe/k8s-copycat/issues/324)) ([cd05f4c](https://github.com/matzegebbe/k8s-copycat/commit/cd05f4cf9ef908d8316a8ff5f585e944e8f56323))
+* **deps:** bump the go-patch group with 5 updates ([#326](https://github.com/matzegebbe/k8s-copycat/issues/326)) ([87d3326](https://github.com/matzegebbe/k8s-copycat/commit/87d332603101632fe2ff88e9e0b070e31c5e4536))
+
 ## [0.38.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.37.0...v0.38.0) (2026-10-05)
 
 
