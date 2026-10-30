@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.40.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.39.0...v0.40.0) (2026-10-30)
+
+
+### Features
+
+* **deps:** bump docker/login-action from 4.6.0 to 4.7.0 ([#329](https://github.com/matzegebbe/k8s-copycat/issues/329)) ([e045370](https://github.com/matzegebbe/k8s-copycat/commit/e04537009f2cbbbe4ddaae9051ff86ebdafd74be))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#327](https://github.com/matzegebbe/k8s-copycat/issues/327)) ([690251d](https://github.com/matzegebbe/k8s-copycat/commit/690251dd4c93080da1ae67617772451eb9e9ba93))
+* **deps:** bump the go-patch group with 2 updates ([#331](https://github.com/matzegebbe/k8s-copycat/issues/331)) ([50d69ff](https://github.com/matzegebbe/k8s-copycat/commit/50d69ff7f1ff812a0440943d7525bc8a99b8656a))
+* **deps:** bump the go-patch group with 5 updates ([#330](https://github.com/matzegebbe/k8s-copycat/issues/330)) ([e4aae14](https://github.com/matzegebbe/k8s-copycat/commit/e4aae1452ae6e1b288db951d9e0e1d75d88bad48))
+
 ## [0.39.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.38.0...v0.39.0) (2026-10-14)
 
 
