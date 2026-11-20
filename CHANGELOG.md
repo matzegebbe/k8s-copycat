@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.41.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.40.0...v0.41.0) (2026-11-20)
+
+
+### Features
+
+* **deps:** bump docker/login-action from 4.7.0 to 4.8.0 ([#334](https://github.com/matzegebbe/k8s-copycat/issues/334)) ([30d1197](https://github.com/matzegebbe/k8s-copycat/commit/30d1197f01d6965eda71f026ae593c4c901bb421))
+* **deps:** bump github.com/aws/aws-sdk-go-v2 ([#340](https://github.com/matzegebbe/k8s-copycat/issues/340)) ([e863aa9](https://github.com/matzegebbe/k8s-copycat/commit/e863aa91c8d78cdf41b2a85759ea0034a513b706))
+* **deps:** bump github.com/aws/aws-sdk-go-v2/service/ecr ([#343](https://github.com/matzegebbe/k8s-copycat/issues/343)) ([d15c64d](https://github.com/matzegebbe/k8s-copycat/commit/d15c64dd319af91f33f01dd04614b715c4a42f84))
+* **deps:** bump sigs.k8s.io/controller-runtime ([#341](https://github.com/matzegebbe/k8s-copycat/issues/341)) ([a8a88e9](https://github.com/matzegebbe/k8s-copycat/commit/a8a88e9f81c783710c8c1314fa9633e81e898f54))
+* **deps:** bump the go-patch group across 1 directory with 4 updates ([#339](https://github.com/matzegebbe/k8s-copycat/issues/339)) ([0158b82](https://github.com/matzegebbe/k8s-copycat/commit/0158b822d288c9ff5b3392c665abd7f9362ff5a4))
+* **deps:** bump the go-patch group with 2 updates ([#338](https://github.com/matzegebbe/k8s-copycat/issues/338)) ([857b007](https://github.com/matzegebbe/k8s-copycat/commit/857b007d447a6424017dfe693203d26dd73893e6))
+* **deps:** bump the go-patch group with 2 updates ([#342](https://github.com/matzegebbe/k8s-copycat/issues/342)) ([c06af2b](https://github.com/matzegebbe/k8s-copycat/commit/c06af2b82335443fdfdfd990522c41fd2f149a7a))
+* **deps:** bump the go-patch group with 5 updates ([#337](https://github.com/matzegebbe/k8s-copycat/issues/337)) ([796bea2](https://github.com/matzegebbe/k8s-copycat/commit/796bea2ba5c27ab7480b5e47e2fbcd5095009434))
+* **deps:** bump the go-patch group with 8 updates ([#335](https://github.com/matzegebbe/k8s-copycat/issues/335)) ([eef4046](https://github.com/matzegebbe/k8s-copycat/commit/eef40469f7c7e10bda322ec450e0df768dc3d5a0))
+
 ## [0.40.0](https://github.com/matzegebbe/k8s-copycat/compare/v0.39.0...v0.40.0) (2026-11-06)
 
 
